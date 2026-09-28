@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Floating Clock</string>
+    <string name="development_version">开发版本 v%1$s</string>
+    <string name="demo_notice">演示状态 · 功能尚未启用</string>
+    <string name="overlay_title">悬浮窗状态</string>
+    <string name="overlay_placeholder">未启动 · 本版本仅提供界面占位</string>
+    <string name="source_title">时间源状态</string>
+    <string name="source_placeholder">未接入 · 未校准 · 精度未验证</string>
+    <string name="accuracy_notice">显示毫秒不代表实际精度；公共网络时间不等于购物平台官方时间。</string>
+    <string name="settings_placeholder">设置（暂未开放）</string>
+</resources>
