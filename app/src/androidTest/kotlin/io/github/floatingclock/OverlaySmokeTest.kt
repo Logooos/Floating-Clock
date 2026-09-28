@@ -58,6 +58,7 @@ class OverlaySmokeTest {
         main { compose.activity.startOverlay() }
         await { OverlayState.running || !OverlayState.requested }
         main { assertTrue(OverlayState.message, OverlayState.running) }
+        await { windows().singleOrNull()?.let { it.isAttachedToWindow && it.width > 0 && it.height > 0 } == true }
     }
 
     @Before fun prepare() {
