@@ -12,7 +12,10 @@
 | API 31 `connectedDebugAndroidTest` | NOT RUN | 本地无 Android SDK／模拟器，交由 CI 冒烟任务 |
 | Wrapper JAR SHA-256 | PASS | 与 Gradle 9.6.0 官方校验和一致，见 architecture.md |
 | XML / TOML / CI YAML 静态解析 | PASS | Python XML、tomli、PyYAML 解析；检查 CI 包含三个必需命令 |
-| GitHub Actions | 未验证 | 等待开发分支推送后的实际运行；工作流文件不是通过证明 |
+| 三份项目 Skill | PASS | skill-creator 的 quick_validate.py；已有 time-source 文件去除 BOM 并规范为 SKILL.md |
+| 提交内容扫描 | PASS | 未检测到 SDK 本地路径、常见凭据、密钥或生成构建产物；静态扫描不等同于完整安全审计 |
+| Git diff 空白检查 | PASS（本轮代码） | PRD 原有 Markdown 行尾双空格保留；其余暂存文件通过 diff --check |
+| GitHub Actions | 未验证 / NOT RUN | 已配置用户提供的远端；推送因缺少 GitHub 凭据失败，API 返回无工作流运行记录 |
 | 真机验证 | NOT RUN | 当前没有 Android 真机 |
 
 ## 自动化覆盖
@@ -33,6 +36,13 @@ CI 分别执行 `./gradlew testDebugUnitTest --stacktrace`、
 `./gradlew lintDebug --stacktrace`、`./gradlew assembleDebug --stacktrace`，
 并上传报告和 Debug APK。模拟器任务执行 `./gradlew connectedDebugAndroidTest --stacktrace`。
 查看 Actions 对应提交 SHA、任务结果和报告；任务跳过不算通过。
+
+目标仓库：[Logooos/Floating-Clock](https://github.com/Logooos/Floating-Clock)。
+开发分支：`codex/bootstrap-v0.1.0`。本地初始提交：`78ae86e`。
+实际尝试 `git push -u origin codex/bootstrap-v0.1.0`，非交互重试返回
+`could not read Username for 'https://github.com': terminal prompts disabled`。
+认证恢复后重新推送该分支，查看 [Actions](https://github.com/Logooos/Floating-Clock/actions)，
+并以实际结果更新此表。本次没有向 main 推送，没有发布 Release。
 
 ## 未完成的设备及后续验证
 
