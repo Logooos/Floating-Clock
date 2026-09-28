@@ -32,12 +32,13 @@ class OverlayService : Service() {
     private lateinit var session: OverlaySession
     internal var clockView: OverlayClockView? = null
         private set
+    private var windowAdded = false
     private var receiverRegistered = false
     private var watchingPermissions = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val permissionListener = AppOpsManager.OnOpChangedListener { _, packageName ->
         if (packageName == this.packageName) mainHandler.post {
-            if (!Settings.canDrawOverlays(this)) shutdown("悬浮窗权限已撤销")
+            if (watchingPermissions && !Settings.canDrawOverlays(this)) shutdown("悬浮窗权限已撤销")
         }
     }
     private val screenReceiver = object : BroadcastReceiver() {
@@ -92,6 +93,7 @@ class OverlayService : Service() {
             .setContentTitle("Floating Clock · 演示数据")
             .setContentText("模拟时间，精度未验证；点击停止或返回首页")
             .setContentIntent(home).setOngoing(true)
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(Notification.Action.Builder(null, "停止", stop).build()).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(1, notification)
@@ -113,6 +115,7 @@ class OverlayService : Service() {
         )
         clockView = view
         windows.addView(view, params)
+        windowAdded = true
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
         receiverRegistered = true
         getSystemService(AppOpsManager::class.java).startWatchingMode(
@@ -150,9 +153,10 @@ class OverlayService : Service() {
         OverlayState.onConfigChanged = null
         clockView?.let { view ->
             view.dispose()
-            try { if (view.isAttachedToWindow) windows.removeViewImmediate(view) }
+            try { if (windowAdded) windows.removeViewImmediate(view) }
             catch (_: IllegalArgumentException) { /* Already removed by the system. */ }
         }
+        windowAdded = false
         clockView = null
         if (receiverRegistered) { unregisterReceiver(screenReceiver); receiverRegistered = false }
         if (watchingPermissions) {

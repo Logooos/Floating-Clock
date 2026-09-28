@@ -84,6 +84,19 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest --stacktrace
+      - name: Annotate emulator failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          for path in pathlib.Path("app/build/outputs/androidTest-results").rglob("TEST-*.xml"):
+              root = ET.parse(path).getroot()
+              for case in root.iter("testcase"):
+                  for failure in list(case.findall("failure")) + list(case.findall("error")):
+                      message = (failure.text or failure.get("message", ""))[:5000]
+                      message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title={case.get('name')}::{message}")
+          PY
       - name: Upload emulator reports
         if: always()
         uses: actions/upload-artifact@v4

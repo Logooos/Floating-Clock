@@ -40,6 +40,7 @@ class OverlaySmokeTest {
         automation.serviceInfo = info
         shell("input keyevent 224"); shell("wm dismiss-keyguard")
         shell("appops set ${BuildConfig.APPLICATION_ID} SYSTEM_ALERT_WINDOW allow")
+        shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION allow")
         main { OverlayState.configure(OverlayConfig()) }
     }
 
@@ -65,11 +66,21 @@ class OverlaySmokeTest {
     }
 
     @Test fun notificationDenialStillAllowsHomeStop() {
-        if (Build.VERSION.SDK_INT >= 33) assertEquals(PackageManager.PERMISSION_DENIED,
-            compose.activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS))
+        shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION ignore")
+        assertFalse(compose.activity.getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled())
         start()
         main { compose.activity.stopOverlay() }
         await { !OverlayState.running }
+    }
+
+    @Test fun notificationStopActionReleasesService() {
+        if (Build.VERSION.SDK_INT >= 33) shell("pm grant ${BuildConfig.APPLICATION_ID} android.permission.POST_NOTIFICATIONS")
+        start()
+        val manager = compose.activity.getSystemService(android.app.NotificationManager::class.java)
+        val notification = manager.activeNotifications.single { it.id == 1 }.notification
+        notification.actions.single().actionIntent.send()
+        await { !OverlayState.running && !OverlayState.requested }
+        compose.waitUntil(10_000) { windows().isEmpty() }
     }
 
     @Test fun lockStopsAndUnlockDoesNotResume() {
@@ -133,6 +144,9 @@ class OverlaySmokeTest {
         }
         await { view.frameScheduled }
         main {
+            view.performClick()
+            assertTrue(view.menuOpen)
+            assertFalse(view.frameScheduled)
             view.dispose()
             assertFalse(view.frameScheduled)
             (view.parent as android.view.ViewGroup).removeView(view)

@@ -5,8 +5,8 @@
 ## v0.3.0 验证（进行中）
 
 基线 bf2aefc，工作区干净；上一次代码 b4d7d90 的 CI 成功。
-保留 39 项核心 JVM 测试及 2 项首页仪器测试；新增 14 项 app 单元测试、7 项仪器测试，
-累计 62 个独立测试用例。API 31/35 重复运行同一组仪器测试不重复计入数量。
+保留 39 项核心 JVM 测试及 2 项首页仪器测试；新增 14 项 app 单元测试、8 项仪器测试，
+累计 63 个独立测试用例。API 31/35 重复运行同一组仪器测试不重复计入数量。
 
 本地实际尝试 gradlew.bat testDebugUnitTest、lintDebug、assembleDebug、
 connectedDebugAndroidTest：全部 NOT RUN，无 JDK/JAVA_HOME，Wrapper 无法启动。

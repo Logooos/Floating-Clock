@@ -12,6 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -44,24 +48,26 @@ internal class DemoTimeSource(
 
 @Composable
 internal fun DemoClock(engine: TimeEngine, source: TimeSource, active: Boolean) {
+    val lifecycle = (LocalContext.current as LifecycleOwner).lifecycle
     val platform = PlatformId.TAOBAO_TMALL
     val formatter = remember { MillisecondTimeFormatter() }
     var timeText by remember(engine) { mutableStateOf<String?>(null) }
     var state by remember(engine) { mutableStateOf(PlatformTimeState(platform)) }
 
-    LaunchedEffect(engine, source, active) {
+    LaunchedEffect(engine, source, active, lifecycle) {
         if (!active) return@LaunchedEffect
-        if (engine.state(platform).sourceId == null) engine.calibrate(platform, source)
-        val readings = TimeReadings()
-        while (isActive) {
-            engine.readInto(readings)
-            state = readings.state(platform)
-            timeText = if (readings.hasTime(platform)) formatter.format(readings.shownUtcEpochNanos(platform)) else null
-            // Presentation cadence only: every tick samples the monotonic clock, never adds 16 ms.
-            delay(16)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (engine.state(platform).sourceId == null) engine.calibrate(platform, source)
+            val readings = TimeReadings()
+            while (isActive) {
+                engine.readInto(readings)
+                state = readings.state(platform)
+                timeText = if (readings.hasTime(platform)) formatter.format(readings.shownUtcEpochNanos(platform)) else null
+                // Presentation cadence only; elapsed time always comes from the engine.
+                delay(16)
+            }
         }
     }
-
     val sourceLabel = stringResource(when (state.sourceType) {
         TimeSourceType.OFFICIAL_API -> R.string.source_official
         TimeSourceType.HTTP_ESTIMATE -> R.string.source_http

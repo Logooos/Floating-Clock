@@ -20,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import io.github.floatingclock.time.*
 import java.util.Locale
@@ -106,7 +108,7 @@ private fun PlatformControls() {
     PlatformId.entries.forEach { platform ->
         Row {
             val selected = platform in config.platforms
-            Checkbox(checked = selected,
+            Checkbox(checked = selected, modifier = Modifier.semantics { contentDescription = platform.label() },
                 enabled = if (selected) config.platforms.size > 1 else config.platforms.size < 3,
                 onCheckedChange = { OverlayState.configure(config.toggle(platform)) })
             Text(platform.label(), modifier = Modifier.padding(top = 12.dp))
