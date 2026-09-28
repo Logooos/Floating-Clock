@@ -141,7 +141,7 @@ class OverlayService : Service() {
                 sample?.roundTripNanos?.let { append("\n往返延迟（估计）：${it / 1_000_000.0} ms") }
                 sample?.estimatedOffsetNanos?.let { append("\n相对请求时本机墙钟估计偏移：${it / 1_000_000.0} ms") }
                 sample?.let { append("\n来源分辨率：${it.resolutionNanos} ns；端点：${it.endpoint ?: state.sourceId}") }
-                sample?.let { append("\n最后成功基准 UTC：${java.time.Instant.ofEpochSecond(Math.floorDiv(it.anchor.serverUtcEpochNanos, 1_000_000_000), Math.floorMod(it.anchor.serverUtcEpochNanos, 1_000_000_000))}") }
+                sample?.let { append("\n最后成功基准 UTC：${java.time.Instant.ofEpochSecond(Math.floorDiv(it.anchor.serverUtcEpochNanos, 1_000_000_000), Math.floorMod(it.anchor.serverUtcEpochNanos, 1_000_000_000L))}") }
                 adjustment?.let { append("\n本次校准跳变量：${it / 1_000_000.0} ms（非实测误差）") }
                 state.failureReason?.let { append("\n$it") }
                 append("\n不确定度／实测误差：未知；下次自动同步约 ${interval / 1000} 秒")

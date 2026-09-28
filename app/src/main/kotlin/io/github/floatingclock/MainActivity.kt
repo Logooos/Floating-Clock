@@ -83,6 +83,10 @@ class MainActivity : ComponentActivity() {
         refreshPermissions()
         if (!overlayGranted) { OverlayState.message = "需要悬浮窗权限"; return }
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || OverlayState.requested || OverlayState.running) return
+        if (OverlayState.sourceChoice == SourceChoice.HTTP) {
+            try { HttpDateTimeSource(java.net.URL(OverlayState.httpUrl), clock) }
+            catch (_: Exception) { OverlayState.message = "请输入有效的公开 HTTPS URL，不含认证、查询参数或片段"; return }
+        }
         OverlayState.requested = true
         OverlayState.message = "正在启动"
         try { startForegroundService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_START)) }

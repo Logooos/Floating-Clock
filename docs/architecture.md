@@ -1,7 +1,8 @@
 # 时间引擎与悬浮窗架构
 
-v0.3.0 在既有时间引擎上实现悬浮窗和生命周期；不实现真实来源、存储或重试调度。
-不声称已满足 PRD S0 的来源审计与初始公共时间路径退出条件。PRD.md 保持不变。
+v0.4.0 在既有时间引擎和悬浮窗上接入真实网络来源与同源同步策略。
+官方时间来源审计见 time-sources.md；未发现满足本地无密钥条件的可接入官方源。
+公共端点的设备网络可达性仍待实测，不声称完成官方精度验收。PRD.md 保持不变。
 
 ## 工具链与证据（2026-09-28）
 
@@ -13,6 +14,7 @@ v0.3.0 在既有时间引擎上实现悬浮窗和生命周期；不实现真实�
 | Kotlin / Compose compiler plugin | 2.2.10 | AGP 9.4.0 POM 的内置 KGP 版本，统一 JVM 插件与 Compose 编译插件 |
 | Compose BOM | 2026.02.01 | Google Maven 稳定 BOM；UI/Foundation 1.10.4、Material3 1.4.0 |
 | Activity Compose | 1.12.4 | AndroidX 稳定版 |
+| kotlinx.coroutines | 1.10.2 | 显式统一 core/android/test 稳定版本，支持可取消 I/O 与虚拟调度测试 |
 | min / compile / target SDK | 31 / 36 / 36 | API 36 稳定，位于 AGP 支持范围内，保留 Android 12 下限 |
 | SDK Build Tools | 36.0.0 | AGP 默认；CI 显式安装 |
 
@@ -41,12 +43,13 @@ distribution 校验和固定在 `gradle-wrapper.properties`，CI setup-gradle �
 ## 模块与时间契约
 
 依赖方向仅为 `app -> core:time`。不提前创建来源、存储、悬浮模块。
-主界面注入 `SystemClock.elapsedRealtimeNanos()` 和 `DemoTimeSource`，展示固定
-2026-01-01 UTC 起点推进的演示时间；完整设置按钮仍禁用；首页提供悬浮窗与可选通知授权，没有真实网络请求。
+服务注入 `SystemClock.elapsedRealtimeNanos()`，默认使用真实网络来源；所有平台共享一个
+串行采样器。首页提供来源选择、同步、悬浮窗与可选通知授权。显式演示模式才展示固定
+2026-01-01 UTC 起点的模拟时间。来源配置暂不持久化，完整设置仍留待后续。
 
 - `ClockProvider` 只提供单调纳秒，可注入测试虚拟时钟。Android 实现使用
   `SystemClock.elapsedRealtimeNanos()`，包括休眠时间，不能以墙上时间或帧数替代。
-- `TimeSource` 提供来源 ID、来源类别和可挂起校准接口，未实现网络适配器。
+- `TimeSource` 提供来源 ID、来源类别和可挂起校准接口；v0.4.0 实现系统网络、NTP 与 HTTP Date 适配器。
 - `CalibrationResult` 沿用成功／失败类型，扩展有符号估计偏移（纳秒）和不确定度证据。
   估计偏移不参与显示叠加、不等于实测误差；不确定度默认为 null，非空值必须附证据说明，
   提供方仍有责任验证证据，字符串本身不是精度证明。当前没有独立参照测量，
@@ -71,7 +74,8 @@ STALE，保留历史但不输出时间，必须重新校准。跨重启仍不能
 
 `calibrate(platform, source)` 或 `calibrate(platforms, source)` 显式调用 TimeSource 一次。
 同源平台可以批量校准，共享同一个不可变样本。首次选择后来源 ID 与类别固定；
-任何改变都必须显式创建新会话，不因失败换源。本阶段不实现后台源调度或自动重试。
+运行中任何改变都必须显式创建新会话，不因失败换源。初次失败且从未获得有效锚点时，
+同步器才可调用 `resetFailedInitialSource` 继续初始候选；保留用户偏移，不可丢弃成功锚点。
 
 | 事件 | 状态／结果 |
 | --- | --- |
@@ -92,8 +96,8 @@ STALE，保留历史但不输出时间，必须重新校准。跨重启仍不能
 ## 并发、读取与显示
 
 引擎用一把短锁保护五个平台状态与偏移。调用可挂起的 TimeSource 在锁外，
-不在锁内等待网络，也不把网络请求放到读取路径。未来真实适配器负责切换合适的 I/O
-执行上下文、超时及取消；`suspend` 本身不是自动切换到后台线程。
+不在锁内等待网络，也不把网络请求放到读取路径。真实适配器使用 Dispatchers.IO、
+超时及资源关闭处理取消；`suspend` 本身不是自动切换到后台线程。
 
 `setOffsets(globalMillis, platformMillisMap)` 原子替换完整配置，未提供的平台偏移为零。
 输入 Map 不保留引用，合并偏移预先换算为纳秒；溢出时拒绝整次更新，不发布一半配置。
@@ -132,7 +136,8 @@ API 31–33 使用兼容重载；通知拒绝不阻止前台服务，首页始�
 参考 [FGS 类型](https://developer.android.com/develop/background-work/services/fgs/service-types) 和
 [通知权限](https://developer.android.com/develop/ui/compose/notifications/notification-permission)。
 
-每次会话建立新 TimeEngine 和 DemoTimeSource，一次模拟样本共享五入口。
+每次会话建立新 TimeEngine 和 TimeSynchronizer，单次来源样本共享五入口。
+生产默认真实来源；演示模式注入 DemoTimeSource，仪器测试也可注入可取消的本地假源。
 OverlaySession 使启动/停止幂等，并在前台提升或窗口创建失败时清理部分资源。
 息屏广播、交互/锁屏复核、AppOps 权限撤销监听都结束会话；销毁时移除窗口、
 取消协程、帧和手势回调、注销广播与权限监听。解锁没有恢复路径。
@@ -148,4 +153,28 @@ Choreographer 使用系统 VSYNC，preferredRefreshRate=120 只是偏好，实�
 FrameStats 统计实际完成绘制的帧间隔，每秒更新首页 FPS，暂停后重置统计。
 格式化仍分配字符串/Instant，真实帧率、功耗与跨应用隐藏策略需要设备测量；
 系统/宿主隐藏 overlay 不保证都向应用分发可见性回调，不能声称已验证所有遮挡场景。
-完整模式显示模拟 NTP/未知精度；紧凑和极简始终保留演示与未验证提示，菜单可查来源。
+完整模式显示实际来源；所有模式保留未验证和异常提示，点击菜单可查端点、采样指标及同步。
+演示模式额外明确标注模拟数据，不把平台名称当作来源名称。
+
+## v0.4.0 来源与同步
+
+`NetworkTimeSources` 在纯 Kotlin 层实现可注入的系统网络读取、NTP/HTTP I/O；
+Android 层只负责 API 33 门控、公开 DnsResolver 和来源目录。沿用既有 HTTP_ESTIMATE
+枚举以兼容引擎契约，展示名明确为 HTTP_ESTIMATED。无官方接口适配器，无隐藏 API。
+
+系统网络时钟读取前后采单调时间，关联中点，拒绝超过 100ms 的读取；DateTimeException
+视为不可用。NTP 请求用一次墙钟值初始化协议时间轴，收包 UTC 标签由单调差生成；
+四时间戳计算 RTT/估计偏移，不受途中墙钟变化影响。HTTP 仅估算秒级 Date，严格拒绝
+明显缓存、中间层或异常响应。协议校验、端点与具体限制见 time-sources.md。
+
+`TimeSynchronizer` 是一个会话拥有的串行协程，不是全局后台服务。初次按目录尝试，
+选中后固定 sourceId，失败保持旧锚点；30/60/300 秒退避，连续三次失败标为 STALE，
+持续探测同源。成功后的 30–300 秒间隔由连续样本变化量和 RTT 调整，阈值不代表误差。
+每来源进程级 RequestBudget 保证手动重启/连点不会直接绕过 30 秒下限；请求通道合并点击。
+明显跳变先拒绝并等下一次同源样本复核；确认后允许新锚点跳变，并在详情显示变化量。
+不提前实现多源投票、NTS、持久日志或复杂滤波。
+
+服务销毁先取消会话和 I/O，再释放窗口/回调/接收器；初始兜底之间和发布结果前检查取消。
+不合作的底层调用在返回后也不能覆盖停止前基准；引擎保留既有请求序号保护乱序结果。
+仅使用系统 DNS、DatagramSocket、HttpURLConnection，不新增网络框架或模块。
+没有独立参考测量，所有样本的估计不确定度和实测误差均未知。
