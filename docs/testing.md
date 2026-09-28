@@ -16,6 +16,10 @@
 | 提交内容扫描 | PASS | 未检测到 SDK 本地路径、常见凭据、密钥或生成构建产物；静态扫描不等同于完整安全审计 |
 | Git diff 空白检查 | PASS（本轮代码） | PRD 原有 Markdown 行尾双空格保留；其余暂存文件通过 diff --check |
 | GitHub Actions 首轮 | FAIL | SSH 推送成功；SDK setup Action 失败；lintDebug、assembleDebug 通过；单元测试、APK 上传与模拟器跳过 |
+| 云端 `./gradlew testDebugUnitTest --stacktrace` | PASS | 第二轮 36384811167，提交 82067ed，包含 core:time:test |
+| 云端 `./gradlew lintDebug --stacktrace` | PASS | 同一轮 build job |
+| 云端 `./gradlew assembleDebug --stacktrace` | PASS | 同一轮 build job，Debug APK 已上传 |
+| 云端 API 31 `./gradlew connectedDebugAndroidTest --stacktrace` | PASS | 同一轮 smoke-api-31 job，启动与首页占位断言通过，报告已上传；仅模拟器 |
 | 真机验证 | NOT RUN | 当前没有 Android 真机 |
 
 ## 自动化覆盖
@@ -45,7 +49,13 @@ HTTPS 首次推送因缺少凭据失败；改为用户指定的 SSH 地址
 对应 `f869480`：SDK setup Action 失败，但 runner 自带 SDK 支持 lint 与 assemble 成功。
 公开日志接口返回 403，未获得该 Action 的具体失败日志，不推断错误根因。
 工作流已改用固定 Ubuntu 24.04 runner 自带的 SDK 管理器安装指定组件，移除多余安装 Action。
-等待修正后的 CI 结果。本次没有向 main 推送，没有发布 Release。
+[修正后运行 36384811167](https://github.com/Logooos/Floating-Clock/actions/runs/36384811167)
+对应 `82067ed`：build job 通过，单元测试、lint、assemble 与产物上传均成功。
+`floating-clock-debug` 产物 ID 为 `10953694011`，归档大小 9,643,619 字节；
+`android-check-reports` 产物 ID 为 `10954655282`。在该运行页面下载，可能需要 GitHub 登录。
+API 31 模拟器启动冒烟通过，`api-31-smoke-reports` 已上传。
+记录结果的后续提交只修改文档，使用 `[skip ci]` 避免重复构建；被验证的代码提交是 `82067ed`。
+本次没有向 main 推送，没有发布 Release。
 
 ## 未完成的设备及后续验证
 

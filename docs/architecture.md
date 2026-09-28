@@ -17,7 +17,8 @@ PRD S0 的来源审计与初始公共时间路径退出条件。PRD.md 保持不
 | SDK Build Tools | 36.0.0 | AGP 默认；CI 显式安装 |
 
 未发现需要偏离用户首选 AGP / Gradle / JDK 的官方兼容性冲突。
-以上是文档及产物元数据核验，不等同于本仓库已构建通过。
+该版本组合已在 GitHub Actions 运行 36384811167 通过单元测试、lint 和 Debug APK 构建，
+具体环境及模拟器／真机验证边界见 testing.md。
 选用已有稳定 Compose BOM，不引入 alpha、beta、RC 或 canary。
 
 - [AGP 9.4 兼容表](https://developer.android.com/build/releases/agp-9-4-0-release-notes)
