@@ -16,7 +16,7 @@
 | 本地 `./gradlew.bat lintDebug` | NOT RUN | 同上 |
 | 本地 `./gradlew.bat assembleDebug` | NOT RUN | 同上 |
 | main 实现 CI | PASS | 实现提交 3349cf1，[运行 36387765939](https://github.com/Logooos/Floating-Clock/actions/runs/36387765939) 全部成功 |
-| 最终 v0.2.0 版本 CI | 待验证 | 先通过实现验收，再更新 0.2.0 / versionCode 2 并重新构建 |
+| 最终 v0.2.0 版本 CI | PASS | b4d7d90，[运行 36388496504](https://github.com/Logooos/Floating-Clock/actions/runs/36388496504)；单元测试、lint、APK 构建及 API 31 两项测试通过 |
 | XML 解析 / git diff --check | PASS | 静态检查，不等同于编译或测试通过 |
 | 真机、实际网络精度、120FPS | NOT RUN | 没有设备、真实网络适配器或独立可信参照 |
 
@@ -24,6 +24,11 @@
 `./gradlew lintDebug --stacktrace`、`./gradlew assembleDebug --stacktrace` 及
 API 31 `./gradlew connectedDebugAndroidTest --stacktrace`，APK 与报告均已上传。
 main 首轮实现检查通过后才更新版本号；未创建 Release 或签名密钥。
+
+最终版本产物：`floating-clock-debug`（ID 10955506045，归档 9,662,540 字节）、
+`android-check-reports`（ID 10955461433）、`api-31-smoke-reports`（ID 10955635526）。
+在上面的最终运行页面下载。验证记录的后续提交只修改此文档并使用 `[skip ci]`；
+实际编译测试的 v0.2.0 代码及版本配置提交为 b4d7d90。
 
 现有 9 个 JVM 测试继续保留，新增 30 个，累计 39 个；Android 测试从 1 个扩展为 2 个，
 总计 41 个（本轮新增 31 个）。这不是基于模拟网络延迟的精度测试。
