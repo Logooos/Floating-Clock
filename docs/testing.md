@@ -1,8 +1,8 @@
 # 验证记录
 
-记录日期：2026-09-28。
+最后核对日期：2026-09-29。
 
-## v0.3.0 验证（进行中）
+## v0.3.0 验证
 
 基线 bf2aefc，工作区干净；上一次代码 b4d7d90 的 CI 成功。
 保留 39 项核心 JVM 测试及 2 项首页仪器测试；新增 14 项 app 单元测试、8 项仪器测试，
@@ -10,7 +10,32 @@
 
 本地实际尝试 gradlew.bat testDebugUnitTest、lintDebug、assembleDebug、
 connectedDebugAndroidTest：全部 NOT RUN，无 JDK/JAVA_HOME，Wrapper 无法启动。
-云端构建及 API 31/35 模拟器结果待记录，不能把代码存在或静态检查视为通过。
+最终代码提交 `00aee5d08a8b917cd4b638b21fc50398024c8424` 的
+[Android CI 36419903183](https://github.com/Logooos/Floating-Clock/actions/runs/36419903183)
+已完成，整体结果为 success。实际执行结果：
+
+| 环境 | 命令 | 结果 |
+| --- | --- | --- |
+| GitHub Actions / JDK 17 / SDK 36 | `./gradlew testDebugUnitTest --stacktrace` | PASS，包含 39 项 core 和 14 项 app 单元测试 |
+| 同上 | `./gradlew lintDebug --stacktrace` | PASS |
+| 同上 | `./gradlew assembleDebug --stacktrace` | PASS |
+| API 31 模拟器 | `./gradlew connectedDebugAndroidTest --stacktrace` | PASS；通知运行时权限拒绝用例由 `SdkSuppress(minSdkVersion = 33)` 排除，不适用于 Android 12 |
+| API 35 模拟器 | `./gradlew connectedDebugAndroidTest --stacktrace` | PASS，包含通知拒绝后的首页停止用例 |
+
+保留原有 41 项，新增 22 项，总计 63 项：53 项单元测试、10 项仪器测试。
+模拟器只验证功能与生命周期，不证明真机帧率、耗电或时间精度。
+窗口/手势测试使用公开 WindowInspector 检查实际窗口数量、附着和移除，
+通过同步 UiAutomation 触摸注入验证点击与长按，不依赖无障碍窗口标题。
+
+早期运行 36417361722、36418012629、36418949951 的模拟器任务曾失败；
+修正了窗口查找方式、通知用例 SDK 前提及初次显示时的触摸同步后，上述最终运行通过。
+没有把这些早期失败记为通过，也没有跳过 API 31 手势测试。
+
+最终运行的产物：`floating-clock-debug`（ID 10969315690，归档 9,697,171 字节）、
+`android-check-reports`（10969210807）、`api-31-smoke-reports`（10968933568）、
+`api-35-smoke-reports`（10969606010），可从运行页面下载。
+此验证记录为后续仅文档提交，使用 `[skip ci]`；受测代码、版本及工作流保持不变。
+已检查工作区和提交文件，未提交机器 SDK 路径、密钥或构建产物；没有创建正式 Release。
 
 新增覆盖：权限缺失、选择与排序、三种模式、重复启动/停止、部分前台服务或窗口失败、
 权限撤销、通知拒绝后的首页停止、实际息屏/唤醒不恢复、点击菜单与长按拖动、
