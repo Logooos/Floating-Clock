@@ -65,19 +65,50 @@ class OverlaySmokeTest {
         shell("input keyevent 224"); shell("wm dismiss-keyguard")
         shell("appops set ${BuildConfig.APPLICATION_ID} SYSTEM_ALERT_WINDOW allow")
         shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION allow")
-        main { OverlayState.configure(OverlayConfig()) }
+        main { OverlayState.configure(OverlayConfig()); OverlayState.sourceChoice = SourceChoice.DEMO }
     }
 
     @After fun cleanup() {
         shell("input keyevent 224"); shell("wm dismiss-keyguard")
         main { compose.activity.stopOverlay() }
         await { !OverlayState.running }
-        main { OverlayState.message = "未启动"; OverlayState.configure(OverlayConfig()) }
+        main { OverlayState.message = "未启动"; OverlayState.configure(OverlayConfig()); NetworkSources.testSource = null }
+    }
+
+    @Test fun screenOffCancelsSourceAndUnlockNeverRestartsRequests() {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean()
+        main {
+            NetworkSources.testSource = object : io.github.floatingclock.time.TimeSource {
+                override val sourceId = "test:cancellable-ntp"
+                override val type = io.github.floatingclock.time.TimeSourceType.NTP
+                override suspend fun calibrate(): io.github.floatingclock.time.CalibrationResult {
+                    calls.incrementAndGet()
+                    try { kotlinx.coroutines.awaitCancellation() } finally { cancelled.set(true) }
+                }
+            }
+        }
+        start(); await { calls.get() == 1 }
+        shell("input keyevent 223")
+        await { !OverlayState.running && cancelled.get() && OverlayState.onSyncNow == null }
+        shell("input keyevent 224"); shell("wm dismiss-keyguard")
+        await { compose.activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        main { assertFalse(OverlayState.running); assertEquals(1, calls.get()) }
     }
 
     @Test fun permissionDeniedDoesNotStart() {
         shell("appops set ${BuildConfig.APPLICATION_ID} SYSTEM_ALERT_WINDOW deny")
         main { compose.activity.startOverlay(); assertFalse(OverlayState.requested); assertFalse(OverlayState.running) }
+    }
+
+    @Test fun autoSourceCatalogMatchesApiWithoutRequestingNetwork() {
+        main {
+            val sources = NetworkSources.create(SourceChoice.AUTO, "", ClockProvider(SystemClock::elapsedRealtimeNanos))
+            val expected = if (Build.VERSION.SDK_INT >= 33) io.github.floatingclock.time.TimeSourceType.SYSTEM_NETWORK
+                else io.github.floatingclock.time.TimeSourceType.NTP
+            assertEquals(expected, sources.first().type)
+            assertTrue(sources.none { it.type == io.github.floatingclock.time.TimeSourceType.OFFICIAL_API })
+        }
     }
 
     @Test fun repeatedStartCreatesOneWindowAndStops() {

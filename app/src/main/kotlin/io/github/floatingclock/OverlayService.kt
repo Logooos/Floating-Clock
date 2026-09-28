@@ -22,12 +22,18 @@ internal object OverlayState {
     var requested by mutableStateOf(false)
     var message by mutableStateOf("未启动")
     var fps by mutableStateOf(0.0)
+    var sourceChoice by mutableStateOf(SourceChoice.AUTO)
+    var httpUrl by mutableStateOf("")
+    var timeState by mutableStateOf(PlatformTimeState(PlatformId.TAOBAO_TMALL))
+    var syncDetails by mutableStateOf("尚未校准，实际误差未知")
+    var onSyncNow: (() -> Unit)? = null
     var onConfigChanged: (() -> Unit)? = null
     fun configure(value: OverlayConfig) { config = value; onConfigChanged?.invoke() }
 }
 
 class OverlayService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var synchronizer: TimeSynchronizer? = null
     private lateinit var windows: WindowManager
     private lateinit var session: OverlaySession
     internal var clockView: OverlayClockView? = null
@@ -55,7 +61,7 @@ class OverlayService : Service() {
         gravity = Gravity.TOP or Gravity.LEFT
         x = 16; y = 160
         preferredRefreshRate = 120f // Advisory only; the display and power policy remain in control.
-        title = "Floating Clock · 演示数据"
+        title = "Floating Clock"
     }
 
     override fun onCreate() {
@@ -73,7 +79,7 @@ class OverlayService : Service() {
         }
         if (session.start(Settings.canDrawOverlays(this), interactive())) {
             OverlayState.running = true
-            OverlayState.message = "运行中 · 演示数据"
+            OverlayState.message = if (OverlayState.sourceChoice == SourceChoice.DEMO) "运行中 · 演示数据" else "运行中 · 网络校时"
         } else shutdown(session.failure ?: "无法启动")
         return START_NOT_STICKY
     }
@@ -90,8 +96,8 @@ class OverlayService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, "overlay")
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
-            .setContentTitle("Floating Clock · 演示数据")
-            .setContentText("模拟时间，精度未验证；点击停止或返回首页")
+            .setContentTitle(if (OverlayState.sourceChoice == SourceChoice.DEMO) "Floating Clock · 演示数据" else "Floating Clock · 网络时间")
+            .setContentText("实际误差未验证；可停止或返回首页查看来源")
             .setContentIntent(home).setOngoing(true)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(Notification.Action.Builder(null, "停止", stop).build()).build()
@@ -107,6 +113,9 @@ class OverlayService : Service() {
         windows = context.getSystemService(WindowManager::class.java)
         val clock = ClockProvider(SystemClock::elapsedRealtimeNanos)
         val engine = TimeEngine(clock)
+        val candidates = NetworkSources.create(OverlayState.sourceChoice, OverlayState.httpUrl, clock)
+        OverlayState.timeState = engine.state(PlatformId.TAOBAO_TMALL)
+        OverlayState.syncDetails = "初次选源中；未获得锚点前不显示时间"
         val view = OverlayClockView(context, engine,
             allowed = { Settings.canDrawOverlays(this) && interactive() },
             stop = { shutdown("权限被撤销或屏幕不可交互，已停止") },
@@ -123,10 +132,25 @@ class OverlayService : Service() {
         watchingPermissions = true
         check(Settings.canDrawOverlays(this) && interactive())
         OverlayState.onConfigChanged = { view.configurationChanged(); updateWindow() }
-        // The synthetic source completes without I/O. Future network work stays outside frame callbacks.
-        scope.launch {
-            try { engine.calibrate(PlatformId.entries.toSet(), DemoTimeSource(clock)) }
-            catch (_: Exception) { shutdown("模拟校准失败，已停止") }
+        synchronizer = TimeSynchronizer(engine, clock, candidates, onUpdate = { state, adjustment, interval ->
+            OverlayState.timeState = state
+            val sample = state.lastSuccess
+            OverlayState.syncDetails = buildString {
+                append(state.sourceLabel()); append(" · "); append(state.sourceId ?: "尚未选定")
+                append("\n"); append(state.statusLabel())
+                sample?.roundTripNanos?.let { append("\n往返延迟（估计）：${it / 1_000_000.0} ms") }
+                sample?.estimatedOffsetNanos?.let { append("\n相对请求时本机墙钟估计偏移：${it / 1_000_000.0} ms") }
+                sample?.let { append("\n来源分辨率：${it.resolutionNanos} ns；端点：${it.endpoint ?: state.sourceId}") }
+                sample?.let { append("\n最后成功基准 UTC：${java.time.Instant.ofEpochSecond(Math.floorDiv(it.anchor.serverUtcEpochNanos, 1_000_000_000), Math.floorMod(it.anchor.serverUtcEpochNanos, 1_000_000_000))}") }
+                adjustment?.let { append("\n本次校准跳变量：${it / 1_000_000.0} ms（非实测误差）") }
+                state.failureReason?.let { append("\n$it") }
+                append("\n不确定度／实测误差：未知；下次自动同步约 ${interval / 1000} 秒")
+            }
+            view.refreshSourceDetails()
+        }).also { it.start(scope) }
+        OverlayState.onSyncNow = {
+            synchronizer?.syncNow()
+            OverlayState.message = "已请求立即同步；每来源至少间隔 30 秒"
         }
         updateWindow()
     }
@@ -150,6 +174,9 @@ class OverlayService : Service() {
     }
 
     private fun releaseResources() {
+        synchronizer?.stop()
+        synchronizer = null
+        OverlayState.onSyncNow = null
         OverlayState.onConfigChanged = null
         clockView?.let { view ->
             view.dispose()

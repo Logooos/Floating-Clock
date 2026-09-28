@@ -27,6 +27,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.coroutines.android)
     implementation(project(":core:time"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

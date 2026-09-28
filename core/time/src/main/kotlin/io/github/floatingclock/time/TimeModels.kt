@@ -49,10 +49,14 @@ sealed interface CalibrationResult {
         val estimatedUncertaintyNanos: Long? = null,
         val estimatedOffsetNanos: Long? = null,
         val uncertaintyEvidence: String? = null,
+        val roundTripNanos: Long? = null,
+        val endpoint: String? = null,
+        val measurementNotes: String? = null,
     ) : CalibrationResult {
         init {
             require(sourceId.isNotBlank())
             require(resolutionNanos > 0)
+            require(roundTripNanos == null || roundTripNanos >= 0)
             require(estimatedUncertaintyNanos == null || estimatedUncertaintyNanos >= 0)
             require(estimatedUncertaintyNanos == null || !uncertaintyEvidence.isNullOrBlank()) {
                 "An uncertainty estimate requires documented evidence; otherwise leave it unknown"

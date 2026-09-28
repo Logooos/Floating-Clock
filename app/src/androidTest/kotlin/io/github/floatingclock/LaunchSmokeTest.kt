@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import io.github.floatingclock.time.ClockProvider
 import io.github.floatingclock.time.TimeEngine
@@ -19,6 +20,8 @@ import io.github.floatingclock.time.TimeEngine
 @RunWith(AndroidJUnit4::class)
 class LaunchSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    @Before fun useOfflineDemo() { compose.runOnUiThread { OverlayState.sourceChoice = SourceChoice.DEMO } }
 
     @Test fun launcherShowsDemoHome() {
         compose.onNodeWithText(compose.activity.getString(R.string.app_name)).assertIsDisplayed()

@@ -29,7 +29,8 @@ jobs:
       - name: Make Wrapper executable
         run: chmod +x gradlew
       - name: Unit tests (includes core time tests)
-        run: ./gradlew testDebugUnitTest --stacktrace
+        shell: bash
+        run: ./gradlew testDebugUnitTest --stacktrace 2>&1 | tee "$RUNNER_TEMP/unit.log"
       - name: Android lint
         if: ${{ !cancelled() }}
         run: ./gradlew lintDebug --stacktrace
@@ -52,13 +53,32 @@ jobs:
             core/time/build/reports/tests/
             core/time/build/test-results/
           if-no-files-found: warn
+      - name: Annotate unit test failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          import os
+          log = pathlib.Path(os.environ["RUNNER_TEMP"]) / "unit.log"
+          if log.exists():
+              for line in log.read_text().splitlines():
+                  if line.startswith("e: "):
+                      print("::error::" + line.replace("%", "%25"))
+          for directory in ("app/build/test-results", "core/time/build/test-results"):
+              for path in pathlib.Path(directory).rglob("TEST-*.xml"):
+                  for case in ET.parse(path).getroot().iter("testcase"):
+                      for failure in list(case.findall("failure")) + list(case.findall("error")):
+                          message = (failure.text or failure.get("message", ""))[:5000]
+                          message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                          print(f"::error title={case.get('name')}::{message}")
+          PY
 
   overlay-smoke:
     needs: build
     strategy:
       fail-fast: false
       matrix:
-        api: [31, 35]
+        api: [31, 33, 35]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

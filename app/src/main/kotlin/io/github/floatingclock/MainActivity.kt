@@ -45,7 +45,8 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
                         Text(stringResource(R.string.development_version, BuildConfig.VERSION_NAME))
-                        Text(stringResource(R.string.demo_notice), color = MaterialTheme.colorScheme.primary)
+                        if (OverlayState.sourceChoice == SourceChoice.DEMO) Text(stringResource(R.string.demo_notice), color = MaterialTheme.colorScheme.primary)
+                        else Text("平台仅用于分组；公共网络时间不是购物平台官方时间。")
                         Text("悬浮窗权限：${if (overlayGranted) "已授予" else "未授予"}")
                         Text(OverlayState.message)
                         Button(onClick = {
@@ -62,8 +63,9 @@ class MainActivity : ComponentActivity() {
                         }
                         Text(String.format(Locale.ROOT, "实绘 FPS：%.1f（非精度指标）", OverlayState.fps))
                         Text("部分应用会隐藏悬浮窗；锁屏停止，解锁不自动恢复。")
+                        SourceControls()
                         PlatformControls()
-                        DemoClock(engine, demoSource, active)
+                        if (OverlayState.sourceChoice == SourceChoice.DEMO) DemoClock(engine, demoSource, active)
                         Text(stringResource(R.string.accuracy_notice))
                         Button(onClick = {}, enabled = false) { Text(stringResource(R.string.settings_placeholder)) }
                     }
@@ -82,7 +84,7 @@ class MainActivity : ComponentActivity() {
         if (!overlayGranted) { OverlayState.message = "需要悬浮窗权限"; return }
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || OverlayState.requested || OverlayState.running) return
         OverlayState.requested = true
-        OverlayState.message = "正在启动 · 演示数据"
+        OverlayState.message = "正在启动"
         try { startForegroundService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_START)) }
         catch (_: RuntimeException) {
             OverlayState.requested = false
@@ -99,6 +101,30 @@ class MainActivity : ComponentActivity() {
     override fun onResume() { super.onResume(); refreshPermissions() }
     override fun onStart() { super.onStart(); active = true }
     override fun onStop() { active = false; super.onStop() }
+}
+
+@Composable
+private fun SourceControls() {
+    var expanded by remember { mutableStateOf(false) }
+    val stopped = !OverlayState.running && !OverlayState.requested
+    Text("实际时间来源（所有显示平台共用）")
+    Box {
+        OutlinedButton(onClick = { expanded = true }, enabled = stopped) { Text(OverlayState.sourceChoice.label) }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            SourceChoice.entries.forEach { choice ->
+                DropdownMenuItem(text = { Text(choice.label) }, enabled = choice != SourceChoice.SYSTEM || Build.VERSION.SDK_INT >= 33,
+                    onClick = { OverlayState.sourceChoice = choice; expanded = false })
+            }
+        }
+    }
+    if (OverlayState.sourceChoice == SourceChoice.HTTP) {
+        OutlinedTextField(value = OverlayState.httpUrl, onValueChange = { OverlayState.httpUrl = it.trim() }, enabled = stopped,
+            label = { Text("公开 HTTPS URL（无密钥、无查询参数）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Text("仅估算 Date 秒级时间；缓存或无法确认新鲜度的响应会被拒绝。")
+    }
+    Text("初次自动选源可兜底；运行中失败只重试原来源。更换来源需先停止。")
+    Text(OverlayState.syncDetails)
+    OutlinedButton(onClick = { OverlayState.onSyncNow?.invoke() }, enabled = OverlayState.running) { Text("立即同步（最短 30 秒）") }
 }
 
 @Composable

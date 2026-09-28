@@ -62,7 +62,7 @@ internal class OverlayClockView(
         setBackgroundColor(Color.rgb(25, 29, 35))
         isClickable = true
         isFocusable = true
-        contentDescription = "演示时钟，精度未验证。点击选择平台，长按拖动"
+        contentDescription = "悬浮时钟，精度未验证。点击选择平台，长按拖动"
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -109,7 +109,9 @@ internal class OverlayClockView(
         canvas.scale(scale, scale)
         paint.color = Color.rgb(255, 205, 100)
         paint.textSize = dp(13).toFloat()
-        canvas.drawText("演示数据 · 精度未验证", dp(12).toFloat(), dp(24).toFloat(), paint)
+        canvas.drawText(if (OverlayState.sourceChoice == SourceChoice.DEMO) "演示数据 · 精度未验证"
+            else if (valid) readings.state(OverlayState.config.platforms.first()).statusLabel() else "无可信时间 · 精度未验证",
+            dp(12).toFloat(), dp(24).toFloat(), paint)
         val config = OverlayState.config
         config.platforms.forEachIndexed { index, platform ->
             var y = dp(36 + index * rowHeight)
@@ -123,7 +125,7 @@ internal class OverlayClockView(
             canvas.drawText(text, dp(12).toFloat(), (y + dp(28)).toFloat(), paint)
             if (config.mode == DisplayMode.FULL) {
                 paint.color = Color.LTGRAY; paint.textSize = dp(12).toFloat()
-                canvas.drawText("模拟 NTP · 不确定度／误差未知", dp(12).toFloat(), (y + dp(50)).toFloat(), paint)
+                canvas.drawText(OverlayState.timeState.sourceLabel(), dp(12).toFloat(), (y + dp(50)).toFloat(), paint)
             }
         }
         if (frameNanos != lastDrawnFrame) {
@@ -161,11 +163,21 @@ internal class OverlayClockView(
         requestLayout(); invalidate(); updateFrames(); resize()
     }
 
+    internal fun refreshSourceDetails() {
+        if (disposed) return
+        if (menuOpen) { removeAllViews(); buildMenu() }
+        invalidate()
+    }
+
     private fun buildMenu() {
         val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         column.addView(TextView(context).apply {
-            text = "平台选择（1–3 个）\n演示 NTP · 不确定度／误差未知"
+            text = "平台选择（1–3 个）\n${OverlayState.syncDetails}"
             setTextColor(Color.WHITE)
+        })
+        column.addView(Button(context).apply {
+            text = "立即同步（受限频保护）"
+            setOnClickListener { OverlayState.onSyncNow?.invoke() }
         })
         val config = OverlayState.config
         PlatformId.entries.forEach { platform ->

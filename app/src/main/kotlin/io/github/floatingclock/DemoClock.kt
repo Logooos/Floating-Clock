@@ -38,10 +38,13 @@ internal class DemoTimeSource(
     private val clock: ClockProvider,
     private val serverUtcEpochNanos: Long = 1_767_225_600_000_000_000L,
 ) : TimeSource {
+    private val originMonotonicNanos = clock.elapsedRealtimeNanos()
     override val sourceId = "demo:public-ntp"
     override val type = TimeSourceType.NTP
     override suspend fun calibrate(): CalibrationResult = CalibrationResult.Success(
-        sourceId, type, TimeAnchor(serverUtcEpochNanos, clock.elapsedRealtimeNanos()),
+        sourceId, type, clock.elapsedRealtimeNanos().let { now ->
+            TimeAnchor(Math.addExact(serverUtcEpochNanos, Math.subtractExact(now, originMonotonicNanos)), now)
+        },
         resolutionNanos = 1_000_000,
     )
 }

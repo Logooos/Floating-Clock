@@ -55,6 +55,17 @@ class TimeEngine(private val clock: ClockProvider) {
 
     fun state(platform: PlatformId): PlatformTimeState = synchronized(lock) { states[platform.ordinal] }
 
+    /** Only initial selection may move on after failure. A successful anchor can never be reset here. */
+    fun resetFailedInitialSource(platforms: Set<PlatformId>) = synchronized(lock) {
+        require(platforms.isNotEmpty())
+        require(platforms.all { states[it.ordinal].lastSuccess == null && !states[it.ordinal].isCalibrating })
+        for (platform in platforms) {
+            val index = platform.ordinal
+            attempts[index]++
+            states[index] = PlatformTimeState(platform, manualOffsetMillis = states[index].manualOffsetMillis)
+        }
+    }
+
     suspend fun calibrate(platform: PlatformId, source: TimeSource) = calibrate(setOf(platform), source)
 
     /** One explicit sample shared by these entries. No retry, source fallback or I/O during reads. */
