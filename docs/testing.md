@@ -1,8 +1,50 @@
 # 验证记录
 
-记录日期：2026-09-28；开发里程碑 v0.1.0。
+记录日期：2026-09-28。
 
-## 当前执行结果
+## v0.2.0 验证
+
+直接在 main 开发；起始提交 983e76c，开始时工作区干净。
+原 tip 带 `[skip ci]`，main 无运行记录；先提交 main 工作流规则，
+[基线运行 36386834001](https://github.com/Logooos/Floating-Clock/actions/runs/36386834001)
+对应 bba0b3c，单元测试、lint、APK 构建和 API 31 冒烟全部通过。
+用户已把 GitHub 默认分支改为 main，旧远端 codex/bootstrap-v0.1.0 已删除。
+
+| 检查 | 结果 | 说明 |
+| --- | --- | --- |
+| 本地 `./gradlew.bat testDebugUnitTest` | NOT RUN | 无 JDK / JAVA_HOME，Wrapper 启动失败 |
+| 本地 `./gradlew.bat lintDebug` | NOT RUN | 同上 |
+| 本地 `./gradlew.bat assembleDebug` | NOT RUN | 同上 |
+| main 实现 CI | PASS | 实现提交 3349cf1，[运行 36387765939](https://github.com/Logooos/Floating-Clock/actions/runs/36387765939) 全部成功 |
+| 最终 v0.2.0 版本 CI | 待验证 | 先通过实现验收，再更新 0.2.0 / versionCode 2 并重新构建 |
+| XML 解析 / git diff --check | PASS | 静态检查，不等同于编译或测试通过 |
+| 真机、实际网络精度、120FPS | NOT RUN | 没有设备、真实网络适配器或独立可信参照 |
+
+实现 CI 实际通过 `./gradlew testDebugUnitTest --stacktrace`、
+`./gradlew lintDebug --stacktrace`、`./gradlew assembleDebug --stacktrace` 及
+API 31 `./gradlew connectedDebugAndroidTest --stacktrace`，APK 与报告均已上传。
+main 首轮实现检查通过后才更新版本号；未创建 Release 或签名密钥。
+
+现有 9 个 JVM 测试继续保留，新增 30 个，累计 39 个；Android 测试从 1 个扩展为 2 个，
+总计 41 个（本轮新增 31 个）。这不是基于模拟网络延迟的精度测试。
+
+- 纳秒／毫秒／秒推进，墙上时间跳变、正负偏移叠加、五入口独立和淘宝／天猫合并配置。
+- 日期、分钟、小时、年界线；纽约春秋夏令时转换；负 epoch、毫秒截断、未知精度。
+- 首次失败、旧基准保留、显式失效、同源恢复、来源拒绝替换、异常与取消传播。
+- 请求区间验证、时钟回退、数值上下界与溢出、旧异步结果不能覆盖新结果或配置。
+- 一次时钟读取计算五个平台；复用缓冲区；偏移 Map 防御复制；跨线程读写一致性。
+- API 31 保留启动与演示标注断言，并注入虚拟时钟、推进 Compose 测试时钟验证显示变化。
+
+测试只用 FakeClock 和 FakeTimeSource，无 Thread.sleep、真实网络或当前日期依赖。
+异步乱序用显式 continuation 控制；并发测试验证同一个不变量，无随机测试数据，
+CountDownLatch 建立开始条件，Future 超时只用于防止死锁，不是计时精度断言。
+
+后续仍需独立参照的真实校时验证、API 32–36 扩展矩阵、小米真机、悬浮与锁屏停机、
+渲染性能和耗电测量。v0.2.0 不实现这些后续功能，也不声称达到 50ms 精度。
+
+## v0.1.0 历史记录
+
+### 执行结果
 
 | 检查 | 结果 | 证据／限制 |
 | --- | --- | --- |
@@ -67,8 +109,8 @@ API 31 模拟器启动冒烟通过，`api-31-smoke-reports` 已上传。
 - 刷新率、帧耗时、耗电及独立官方时间误差，NOT RUN；不能从 JVM 测试推断。
 - 正式签名、安装升级与发布校验和，未授权且本轮不实现。
 
-## 交付检查
+### v0.1.0 交付检查
 
-PRD 保持原样。只维护两个模块，版本为 0.1.0 / versionCode 1。
+v0.1.0 交付时 PRD 保持原样。只维护两个模块，版本为 0.1.0 / versionCode 1。
 提交前检查 `git diff --check`、Wrapper 校验和及暂存文件列表。
 不得纳入 local.properties、机器 SDK 路径、签名密钥、凭据、APK、缓存或 build 目录。

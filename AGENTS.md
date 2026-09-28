@@ -39,6 +39,10 @@ Read it before making architectural or behavioral changes.
 - Prefer testable interfaces over platform-dependent singletons.
 - Inject clocks, time sources and network clients.
 - Use explicit units for timestamps, durations and offsets.
+- Read one monotonic timestamp with a coherent state/offset snapshot for a
+  multi-platform display update; never hold an engine lock across source I/O.
+- A successful calibration is not verified accuracy. Keep unknown uncertainty
+  and measured error unknown, including in simulated data and test reports.
 - Avoid unnecessary dependencies and premature modularization.
 - Never commit secrets, signing keys or machine-specific SDK paths.
 - Do not introduce product features outside the PRD without approval.
