@@ -89,8 +89,8 @@ class OverlaySmokeTest {
         compose.waitUntil(10_000) { windows().isEmpty() }
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun notificationDenialStillAllowsHomeStop() {
-        Assume.assumeTrue("POST_NOTIFICATIONS starts at API 33", Build.VERSION.SDK_INT >= 33)
         shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION ignore")
         assertFalse(compose.activity.getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled())
         start()
@@ -128,7 +128,14 @@ class OverlaySmokeTest {
         start()
         compose.waitUntil(10_000) { windows().size == 1 }
         val before = windowBounds()
-        shell("input tap ${before.centerX()} ${before.centerY()}")
+        val tapTime = SystemClock.uptimeMillis()
+        for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            val event = MotionEvent.obtain(tapTime, SystemClock.uptimeMillis(), action,
+                before.centerX().toFloat(), before.centerY().toFloat(), 0)
+            event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            assertTrue("Touch injection failed", automation.injectInputEvent(event, true))
+            event.recycle()
+        }
         await { windows().single().menuOpen }
         menuClick("京东")
         await { io.github.floatingclock.time.PlatformId.JD in OverlayState.config.platforms }
@@ -138,7 +145,7 @@ class OverlaySmokeTest {
         fun touch(action: Int, x: Int, y: Int) {
             val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x.toFloat(), y.toFloat(), 0)
             event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-            automation.injectInputEvent(event, true)
+            assertTrue("Drag injection failed", automation.injectInputEvent(event, true))
             event.recycle()
         }
         touch(MotionEvent.ACTION_DOWN, before.centerX(), before.centerY())
