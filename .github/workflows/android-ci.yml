@@ -53,8 +53,8 @@ jobs:
             core/time/build/reports/tests/
             core/time/build/test-results/
           if-no-files-found: warn
-      - name: Annotate unit test failures
-        if: failure()
+      - name: Publish unit test counts and failures
+        if: always()
         run: |
           python3 - <<'PY'
           import pathlib, xml.etree.ElementTree as ET
@@ -65,12 +65,17 @@ jobs:
                   if line.startswith("e: "):
                       print("::error::" + line.replace("%", "%25"))
           for directory in ("app/build/test-results", "core/time/build/test-results"):
+              counts = dict(tests=0, failures=0, errors=0, skipped=0)
               for path in pathlib.Path(directory).rglob("TEST-*.xml"):
-                  for case in ET.parse(path).getroot().iter("testcase"):
+                  root = ET.parse(path).getroot()
+                  for key in counts:
+                      counts[key] += int(root.get(key, 0))
+                  for case in root.iter("testcase"):
                       for failure in list(case.findall("failure")) + list(case.findall("error")):
                           message = (failure.text or failure.get("message", ""))[:5000]
                           message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                           print(f"::error title={case.get('name')}::{message}")
+              print(f"::notice title=Unit test results::{directory}: {counts}")
           PY
 
   overlay-smoke:
@@ -104,18 +109,22 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest --stacktrace
-      - name: Annotate emulator failures
-        if: failure()
+      - name: Publish emulator test counts and failures
+        if: always()
         run: |
           python3 - <<'PY'
           import pathlib, xml.etree.ElementTree as ET
+          counts = dict(tests=0, failures=0, errors=0, skipped=0)
           for path in pathlib.Path("app/build/outputs/androidTest-results").rglob("TEST-*.xml"):
               root = ET.parse(path).getroot()
+              for key in counts:
+                  counts[key] += int(root.get(key, 0))
               for case in root.iter("testcase"):
                   for failure in list(case.findall("failure")) + list(case.findall("error")):
                       message = (failure.text or failure.get("message", ""))[:5000]
                       message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                       print(f"::error title={case.get('name')}::{message}")
+          print(f"::notice title=Emulator test results::{counts}")
           PY
       - name: Upload emulator reports
         if: always()

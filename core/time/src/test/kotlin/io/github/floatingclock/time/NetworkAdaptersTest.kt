@@ -25,6 +25,7 @@ class NetworkAdaptersTest {
         assertTrue(SystemNetworkTimeSource(clock) { throw DateTimeException("unavailable") }.calibrate() is CalibrationResult.Failure)
         assertTrue(SystemNetworkTimeSource(clock) { clock.advanceNanos(100_000_001); 0 }.calibrate() is CalibrationResult.Failure)
         assertTrue(SystemNetworkTimeSource(clock) { Long.MAX_VALUE }.calibrate() is CalibrationResult.Failure)
+        assertTrue(SystemNetworkTimeSource(clock) { clock.monotonicNanos.set(0); 0 }.calibrate() is CalibrationResult.Failure)
     }
     @Test fun systemNetworkDiscontinuityIsAnewAnchorNotWallInterpolation() = runBlocking {
         val clock = FakeClock(); var millis = 1000L
@@ -48,7 +49,7 @@ class NetworkAdaptersTest {
                 clock.advanceNanos(750_000_000)
                 server.send(DatagramPacket(bytes, 48, incoming.address, incoming.port))
             }
-            val source = NtpTimeSource("local", clock, { utc / 1_000_000 }, { loopback }, server.localPort)
+            val source = NtpTimeSource("local", clock, { clock.wallUtcEpochMillis }, { loopback }, server.localPort)
             val result = source.calibrate() as CalibrationResult.Success
             worker.await()
             assertEquals(utc + 750_000_000, result.anchor.serverUtcEpochNanos)
@@ -110,7 +111,7 @@ class NetworkAdaptersTest {
         }
     }
     @Test fun httpRejectsPlaintextSecretsQueriesAndFragments() {
-        for (url in listOf("http://example.com", "https://user:secret@example.com", "https://example.com?key=secret", "https://example.com#key")) {
+        for (url in listOf("http://example.com", "https://user:secret@example.com", "https://example.com?key=secret", "https://example.com#key", "https://", "https://example.com:65536")) {
             assertThrows(IllegalArgumentException::class.java) { HttpDateTimeSource(URL(url), FakeClock()) }
         }
     }

@@ -92,7 +92,7 @@ data class PlatformTimeState(
     val lastSuccessfulCalibrationUtcEpochNanos: Long?
         get() = lastSuccess?.anchor?.serverUtcEpochNanos
 
-    // No independent reference measurements are collected in v0.2.0.
+    // No independent reference measurements have been collected.
     val measuredErrorNanos: Long? get() = null
     val accuracyVerified: Boolean get() = false
 }

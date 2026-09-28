@@ -105,6 +105,7 @@ class HttpDateTimeSource(
 ) : TimeSource {
     init {
         require(timeoutMillis in 1..10_000)
+        require(url.host.isNotBlank() && (url.port == -1 || url.port in 1..65535))
         require(url.userInfo == null && url.query == null && url.ref == null)
         require(url.protocol == "https" || (allowLoopbackHttp && url.protocol == "http" && url.host == "127.0.0.1"))
     }
