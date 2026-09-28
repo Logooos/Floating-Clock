@@ -25,7 +25,29 @@ XML/YAML/TOML 解析与 `git diff --check` 仅为静态检查，不等同于编�
 [CI 36457436627](https://github.com/Logooos/Floating-Clock/actions/runs/36457436627) 已全部成功：
 单元测试（包含 core:time）、lint、Debug APK，以及 API 31/33/35 模拟器均 PASS。
 完整实现验收后更新为 0.4.0 / versionCode 4，并强化 URL 校验、测试边界与 CI 报告计数。
-最终版本提交的验证结果待随后记录，不将首轮结果冒充新提交结果。
+最终代码/版本提交 `3538286a7e15b52d9bdbd180df42299939058c91` 的
+[Android CI 36488523850](https://github.com/Logooos/Floating-Clock/actions/runs/36488523850)
+已完成，整体及全部任务均为 **success**。从工作流解析的 JUnit XML 公告核对实际数量：
+
+| 环境 | 实际命令 | 结果 |
+| --- | --- | --- |
+| GitHub Actions / JDK 17 / SDK 36 | `./gradlew testDebugUnitTest --stacktrace` | PASS：core 71、app 17；失败、错误、跳过均为 0 |
+| 同上 | `./gradlew lintDebug --stacktrace` | PASS |
+| 同上 | `./gradlew assembleDebug --stacktrace` | PASS |
+| API 31 模拟器 | `./gradlew connectedDebugAndroidTest --stacktrace` | PASS：11 项；通知权限拒绝用例不适用，被 SDK 过滤器排除，不计为执行通过 |
+| API 33 模拟器 | 同上 | PASS：12 项，失败/错误/跳过均为 0 |
+| API 35 模拟器 | 同上 | PASS：12 项，失败/错误/跳过均为 0 |
+
+全部 100 项独立用例在适用环境中得到验证；多 API 重复执行不叠加独立用例数。
+产物已上传：floating-clock-debug（ID 10999909964，归档 9,739,229 字节）、
+android-check-reports（11001245249）、api-31-smoke-reports（11001220801）、
+api-33-smoke-reports（11000976107）、api-35-smoke-reports（11000735983）。
+APK 与报告可从上述运行页面下载。
+
+后续验证记录提交仅修改本文件，使用 `[skip ci]`；受测代码、版本及工作流未变化。
+已检查提交文件、静态格式及工作区，未纳入机器 SDK 路径、密钥、构建输出；PRD 未改。
+未创建分支、正式 Release、标签或签名密钥。
+CI 尚有既有 Actions 的 Node 20 / setup-java v4 弃用警告，不影响本次成功结果，后续维护时升级。
 
 NOT RUN：真实公共 NTP/HTTPS 端点连通性与限频实测、UDP 123 受限的真实运营商网络、
 OEM 系统网络时间缓存/恢复、真机跨 App/120FPS/耗电、独立参考下的时间误差、API 32/34/36。
