@@ -15,7 +15,7 @@
 | 三份项目 Skill | PASS | skill-creator 的 quick_validate.py；已有 time-source 文件去除 BOM 并规范为 SKILL.md |
 | 提交内容扫描 | PASS | 未检测到 SDK 本地路径、常见凭据、密钥或生成构建产物；静态扫描不等同于完整安全审计 |
 | Git diff 空白检查 | PASS（本轮代码） | PRD 原有 Markdown 行尾双空格保留；其余暂存文件通过 diff --check |
-| GitHub Actions | 未验证 / NOT RUN | 已配置用户提供的远端；推送因缺少 GitHub 凭据失败，API 返回无工作流运行记录 |
+| GitHub Actions 首轮 | FAIL | SSH 推送成功；SDK setup Action 失败；lintDebug、assembleDebug 通过；单元测试、APK 上传与模拟器跳过 |
 | 真机验证 | NOT RUN | 当前没有 Android 真机 |
 
 ## 自动化覆盖
@@ -39,10 +39,13 @@ CI 分别执行 `./gradlew testDebugUnitTest --stacktrace`、
 
 目标仓库：[Logooos/Floating-Clock](https://github.com/Logooos/Floating-Clock)。
 开发分支：`codex/bootstrap-v0.1.0`。本地初始提交：`78ae86e`。
-实际尝试 `git push -u origin codex/bootstrap-v0.1.0`，非交互重试返回
-`could not read Username for 'https://github.com': terminal prompts disabled`。
-认证恢复后重新推送该分支，查看 [Actions](https://github.com/Logooos/Floating-Clock/actions)，
-并以实际结果更新此表。本次没有向 main 推送，没有发布 Release。
+HTTPS 首次推送因缺少凭据失败；改为用户指定的 SSH 地址
+`git@github.com:Logooos/Floating-Clock.git` 后推送成功。
+[首轮运行 36384486826](https://github.com/Logooos/Floating-Clock/actions/runs/36384486826)
+对应 `f869480`：SDK setup Action 失败，但 runner 自带 SDK 支持 lint 与 assemble 成功。
+公开日志接口返回 403，未获得该 Action 的具体失败日志，不推断错误根因。
+工作流已改用固定 Ubuntu 24.04 runner 自带的 SDK 管理器安装指定组件，移除多余安装 Action。
+等待修正后的 CI 结果。本次没有向 main 推送，没有发布 Release。
 
 ## 未完成的设备及后续验证
 
