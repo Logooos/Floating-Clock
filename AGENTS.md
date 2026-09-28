@@ -69,8 +69,8 @@ Never describe emulator testing as physical-device verification.
 
 ## Git workflow
 
-- Use focused branches and Conventional Commits.
-- Do not push directly to main unless explicitly instructed.
+- Use Conventional Commits. The initial milestones are explicitly authorized
+  to develop and push on main; do not create feature branches unless requested.
 - Do not commit generated build outputs.
 - Do not publish releases or handle signing secrets without authorization.
 
