@@ -1,7 +1,5 @@
 package io.github.floatingclock
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -9,7 +7,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
-import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inspector.WindowInspector
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -25,19 +23,44 @@ class OverlaySmokeTest {
     private val automation get() = InstrumentationRegistry.getInstrumentation().uiAutomation
     private fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command))
         .bufferedReader().use { it.readText() }
-    private fun main(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) action()
+        else InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    }
     private fun await(condition: () -> Boolean) = compose.waitUntil(10_000) {
         var result = false
         main { result = condition() }
         result
     }
-    private fun windows(): List<AccessibilityWindowInfo> = automation.windows.filter { it.title?.toString() == "Floating Clock · 演示数据" }
-    private fun start() { main { compose.activity.startOverlay() }; await { OverlayState.running } }
+    private fun windows(): List<OverlayClockView> {
+        var views = emptyList<OverlayClockView>()
+        main { views = WindowInspector.getGlobalWindowViews().filterIsInstance<OverlayClockView>() }
+        return views
+    }
+    private fun windowBounds(): Rect {
+        val bounds = Rect()
+        main {
+            val view = windows().single()
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            bounds.set(location[0], location[1], location[0] + view.width, location[1] + view.height)
+        }
+        return bounds
+    }
+    private fun menuClick(text: String) = main {
+        val matches = ArrayList<View>()
+        windows().single().findViewsWithText(matches, text, View.FIND_VIEWS_WITH_TEXT)
+        assertTrue("Menu item missing: $text", matches.isNotEmpty())
+        matches.first().performClick()
+    }
+    private fun start() {
+        await { compose.activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        main { compose.activity.startOverlay() }
+        await { OverlayState.running || !OverlayState.requested }
+        main { assertTrue(OverlayState.message, OverlayState.running) }
+    }
 
     @Before fun prepare() {
-        val info = automation.serviceInfo
-        info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        automation.serviceInfo = info
         shell("input keyevent 224"); shell("wm dismiss-keyguard")
         shell("appops set ${BuildConfig.APPLICATION_ID} SYSTEM_ALERT_WINDOW allow")
         shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION allow")
@@ -66,6 +89,7 @@ class OverlaySmokeTest {
     }
 
     @Test fun notificationDenialStillAllowsHomeStop() {
+        Assume.assumeTrue("POST_NOTIFICATIONS starts at API 33", Build.VERSION.SDK_INT >= 33)
         shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION ignore")
         assertFalse(compose.activity.getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled())
         start()
@@ -102,14 +126,13 @@ class OverlaySmokeTest {
     @Test fun clickMenuChangesSelectionAndLongPressDrags() {
         start()
         compose.waitUntil(10_000) { windows().size == 1 }
-        val before = Rect().also { windows().single().getBoundsInScreen(it) }
+        val before = windowBounds()
         shell("input tap ${before.centerX()} ${before.centerY()}")
-        compose.waitUntil(10_000) { windows().firstOrNull()?.root?.findAccessibilityNodeInfosByText("京东")?.isNotEmpty() == true }
-        val root = windows().single().root
-        root.findAccessibilityNodeInfosByText("京东").first().performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+        await { windows().single().menuOpen }
+        menuClick("京东")
         await { io.github.floatingclock.time.PlatformId.JD in OverlayState.config.platforms }
-        windows().single().root.findAccessibilityNodeInfosByText("关闭菜单").first()
-            .performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+        menuClick("关闭菜单")
+        await { !windows().single().menuOpen }
         val downTime = SystemClock.uptimeMillis()
         fun touch(action: Int, x: Int, y: Int) {
             val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x.toFloat(), y.toFloat(), 0)
@@ -125,7 +148,7 @@ class OverlaySmokeTest {
         touch(MotionEvent.ACTION_MOVE, before.centerX() + 60, before.centerY() + 80)
         touch(MotionEvent.ACTION_UP, before.centerX() + 60, before.centerY() + 80)
         compose.waitUntil(10_000) {
-            val after = Rect().also { windows().single().getBoundsInScreen(it) }
+            val after = windowBounds()
             after.left != before.left || after.top != before.top
         }
     }

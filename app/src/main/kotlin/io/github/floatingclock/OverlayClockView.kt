@@ -32,7 +32,7 @@ internal class OverlayClockView(
     private var dragging = false
     private var lastX = 0f
     private var lastY = 0f
-    private var frameNanos = 0L
+    private var frameNanos = -1L
     private var lastDrawnFrame = -1L
     private var valid = false
     private val density get() = resources.displayMetrics.density
