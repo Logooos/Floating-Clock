@@ -1,6 +1,7 @@
 package io.github.floatingclock
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,24 +18,45 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.github.floatingclock.time.ClockProvider
+import io.github.floatingclock.time.TimeEngine
+import io.github.floatingclock.time.TimeSource
 
 class MainActivity : ComponentActivity() {
+    private val clock = ClockProvider(SystemClock::elapsedRealtimeNanos)
+    private val engine = TimeEngine(clock)
+    private val demoSource = DemoTimeSource(clock)
+    private var active by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
-                HomeScreen()
+                HomeScreen(engine, demoSource, active)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        active = true
+    }
+
+    override fun onStop() {
+        active = false
+        super.onStop()
     }
 }
 
 @Composable
-private fun HomeScreen() {
+private fun HomeScreen(engine: TimeEngine, source: TimeSource, active: Boolean) {
     Scaffold { insets ->
         Column(
             modifier = Modifier.fillMaxSize().padding(insets)
@@ -45,7 +67,7 @@ private fun HomeScreen() {
             Text(stringResource(R.string.development_version, BuildConfig.VERSION_NAME))
             Text(stringResource(R.string.demo_notice), color = MaterialTheme.colorScheme.primary)
             StatusCard(stringResource(R.string.overlay_title), stringResource(R.string.overlay_placeholder))
-            StatusCard(stringResource(R.string.source_title), stringResource(R.string.source_placeholder))
+            DemoClock(engine, source, active)
             Text(stringResource(R.string.accuracy_notice))
             Button(onClick = {}, enabled = false) {
                 Text(stringResource(R.string.settings_placeholder))

@@ -1,11 +1,22 @@
 <resources>
     <string name="app_name">Floating Clock</string>
     <string name="development_version">开发版本 v%1$s</string>
-    <string name="demo_notice">演示状态 · 功能尚未启用</string>
+    <string name="demo_notice">演示数据 · 非真实平台时间</string>
     <string name="overlay_title">悬浮窗状态</string>
     <string name="overlay_placeholder">未启动 · 本版本仅提供界面占位</string>
-    <string name="source_title">时间源状态</string>
-    <string name="source_placeholder">未接入 · 未校准 · 精度未验证</string>
+    <string name="demo_platform">模拟平台：淘宝／天猫（合并入口）</string>
+    <string name="demo_source">模拟来源：%1$s · %2$s（无网络请求）</string>
+    <string name="source_official">平台官方接口类型（仅模拟）</string>
+    <string name="source_http">HTTP 网页响应估算类型</string>
+    <string name="source_system">Android 系统网络时间类型</string>
+    <string name="source_ntp">公共 NTP 类型</string>
+    <string name="source_none">尚未选定</string>
+    <string name="no_calibrated_time">尚未校准 · 无可信时间</string>
+    <string name="calibration_in_progress">模拟校准中</string>
+    <string name="calibration_demo_success">模拟校准成功 · 精度未验证</string>
+    <string name="calibration_failed_with_history">校准失败 · 保留旧基准</string>
+    <string name="calibration_stale">校准已失效 · 时间可信度不足</string>
+    <string name="demo_accuracy_unknown">不确定度：未知 · 实测误差：未知；未与任何购物平台官方时间同步。</string>
     <string name="accuracy_notice">显示毫秒不代表实际精度；公共网络时间不等于购物平台官方时间。</string>
     <string name="settings_placeholder">设置（暂未开放）</string>
 </resources>

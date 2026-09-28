@@ -72,15 +72,3 @@ class TimeEngineTest {
         }
     }
 }
-
-private class FakeClock : ClockProvider {
-    private var monotonicNanos = 0L
-    var wallUtcEpochMillis = 0L
-
-    override fun elapsedRealtimeNanos(): Long = monotonicNanos
-
-    fun advanceNanos(durationNanos: Long) {
-        require(durationNanos >= 0)
-        monotonicNanos = Math.addExact(monotonicNanos, durationNanos)
-    }
-}
