@@ -1,6 +1,6 @@
-# v0.2.0 时间引擎架构
+# 时间引擎与悬浮窗架构
 
-本阶段实现可测试的时间引擎和演示首页，不实现真实来源、悬浮窗、存储或重试调度。
+v0.3.0 在既有时间引擎上实现悬浮窗和生命周期；不实现真实来源、存储或重试调度。
 不声称已满足 PRD S0 的来源审计与初始公共时间路径退出条件。PRD.md 保持不变。
 
 ## 工具链与证据（2026-09-28）
@@ -42,7 +42,7 @@ distribution 校验和固定在 `gradle-wrapper.properties`，CI setup-gradle �
 
 依赖方向仅为 `app -> core:time`。不提前创建来源、存储、悬浮模块。
 主界面注入 `SystemClock.elapsedRealtimeNanos()` 和 `DemoTimeSource`，展示固定
-2026-01-01 UTC 起点推进的演示时间；设置按钮仍禁用，没有权限申请或真实网络请求。
+2026-01-01 UTC 起点推进的演示时间；完整设置按钮仍禁用；首页提供悬浮窗与可选通知授权，没有真实网络请求。
 
 - `ClockProvider` 只提供单调纳秒，可注入测试虚拟时钟。Android 实现使用
   `SystemClock.elapsedRealtimeNanos()`，包括休眠时间，不能以墙上时间或帧数替代。
@@ -109,7 +109,7 @@ STALE，保留历史但不输出时间，必须重新校准。跨重启仍不能
 仍会分配；没有宣称已实测 120FPS、耗电或零分配渲染。
 
 Compose 示例约每 16ms 请求重新读取并格式化，delay 只是展示节奏，不累加时间。
-Activity 停止时暂停演示更新；这不是悬浮服务，也没有实现 Choreographer 循环。
+Activity 停止时暂停演示更新；首页预览独立于下述 Choreographer 悬浮渲染。
 模拟校准起点通过 DemoTimeSource 构造参数注入，UI 不包含推演公式。
 
 ## 后续实现约束
@@ -118,3 +118,34 @@ Activity 停止时暂停演示更新；这不是悬浮服务，也没有实现 C
 网络采样独立于绘制。锁屏停止采样、帧回调、窗口和服务，解锁不自动重启。
 API 31–32 不调用 API 33 的系统网络时钟；来源失效不能静默切换。
 Proto DataStore / Room 在实际实现配置与诊断时引入，本轮不添加空存储层和依赖。
+
+## v0.3.0 悬浮会话
+
+应用层新增 OverlayService、OverlayClockView、OverlayConfig 和 OverlaySession，
+仍只有 app 与 core:time 两个模块。引擎代码及已有 39 项核心单元测试保持不变。
+配置及运行状态只在进程主线程内共享，不保存服务、锚点或启动意图到磁盘。
+
+Activity 只在 RESUMED 的用户点击中调用 startForegroundService；权限返回不会启动。
+服务不导出、返回 START_NOT_STICKY，不监听开机或解锁广播。
+API 34+ 声明 specialUse、对应权限及用例 property，使用该类型 startForeground。
+API 31–33 使用兼容重载；通知拒绝不阻止前台服务，首页始终保留停止通道。
+参考 [FGS 类型](https://developer.android.com/develop/background-work/services/fgs/service-types) 和
+[通知权限](https://developer.android.com/develop/ui/compose/notifications/notification-permission)。
+
+每次会话建立新 TimeEngine 和 DemoTimeSource，一次模拟样本共享五入口。
+OverlaySession 使启动/停止幂等，并在前台提升或窗口创建失败时清理部分资源。
+息屏广播、交互/锁屏复核、AppOps 权限撤销监听都结束会话；销毁时移除窗口、
+取消协程、帧和手势回调、注销广播与权限监听。解锁没有恢复路径。
+
+单个 TYPE_APPLICATION_OVERLAY 窗口内自绘时钟行；菜单是同一容器的原生子控件，
+支持无障碍勾选和上下移动，不创建每平台独立窗口。NOT_FOCUSABLE/NOT_TOUCH_MODAL
+使矩形外的事件交给下层窗口。原生 GestureDetector 判定长按，拖动位置按安全区域夹限。
+旋转后重新布局；本版不持久化配置和位置。
+
+Choreographer 使用系统 VSYNC，preferredRefreshRate=120 只是偏好，实际节奏由设备决定。
+每次 doFrame 调用一次 readInto，重用 TimeReadings；onDraw 格式化可见行，不复制校时公式。
+窗口隐藏、移除、菜单打开及服务结束时取消帧回调，菜单关闭后继续按单调时间读取。
+FrameStats 统计实际完成绘制的帧间隔，每秒更新首页 FPS，暂停后重置统计。
+格式化仍分配字符串/Instant，真实帧率、功耗与跨应用隐藏策略需要设备测量；
+系统/宿主隐藏 overlay 不保证都向应用分发可见性回调，不能声称已验证所有遮挡场景。
+完整模式显示模拟 NTP/未知精度；紧凑和极简始终保留演示与未验证提示，菜单可查来源。

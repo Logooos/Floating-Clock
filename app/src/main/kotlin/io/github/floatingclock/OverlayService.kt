@@ -1,0 +1,185 @@
+package io.github.floatingclock
+
+import android.app.*
+import android.content.*
+import android.content.pm.ServiceInfo
+import android.graphics.PixelFormat
+import android.os.*
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.github.floatingclock.time.*
+import kotlinx.coroutines.*
+
+/** Process-local state, accessed only on the main thread. No service or anchor is persisted. */
+internal object OverlayState {
+    var config by mutableStateOf(OverlayConfig())
+        private set
+    var running by mutableStateOf(false)
+    var requested by mutableStateOf(false)
+    var message by mutableStateOf("未启动")
+    var fps by mutableStateOf(0.0)
+    var onConfigChanged: (() -> Unit)? = null
+    fun configure(value: OverlayConfig) { config = value; onConfigChanged?.invoke() }
+}
+
+class OverlayService : Service() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private lateinit var windows: WindowManager
+    private lateinit var session: OverlaySession
+    internal var clockView: OverlayClockView? = null
+        private set
+    private var receiverRegistered = false
+    private var watchingPermissions = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val permissionListener = AppOpsManager.OnOpChangedListener { _, packageName ->
+        if (packageName == this.packageName) mainHandler.post {
+            if (!Settings.canDrawOverlays(this)) shutdown("悬浮窗权限已撤销")
+        }
+    }
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_OFF) shutdown("锁屏／息屏已停止，需手动重新启动")
+        }
+    }
+    private val params = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        PixelFormat.TRANSLUCENT,
+    ).apply {
+        gravity = Gravity.TOP or Gravity.LEFT
+        x = 16; y = 160
+        preferredRefreshRate = 120f // Advisory only; the display and power policy remain in control.
+        title = "Floating Clock · 演示数据"
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+
+        session = OverlaySession(::promote, ::attachWindow, ::releaseResources)
+    }
+
+    override fun onBind(intent: Intent?) = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action != ACTION_START || !OverlayState.requested) {
+            shutdown("已停止")
+            return START_NOT_STICKY
+        }
+        if (session.start(Settings.canDrawOverlays(this), interactive())) {
+            OverlayState.running = true
+            OverlayState.message = "运行中 · 演示数据"
+        } else shutdown(session.failure ?: "无法启动")
+        return START_NOT_STICKY
+    }
+
+    private fun interactive(): Boolean = getSystemService(PowerManager::class.java).isInteractive &&
+        !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+
+    private fun promote() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel("overlay", "悬浮时钟", NotificationManager.IMPORTANCE_LOW))
+        val stop = PendingIntent.getService(this, 1, Intent(this, OverlayService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val home = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = Notification.Builder(this, "overlay")
+            .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setContentTitle("Floating Clock · 演示数据")
+            .setContentText("模拟时间，精度未验证；点击停止或返回首页")
+            .setContentIntent(home).setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "停止", stop).build()).build()
+        if (Build.VERSION.SDK_INT >= 34) startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        else startForeground(1, notification)
+    }
+
+    private fun attachWindow() {
+        val display = getSystemService(android.hardware.display.DisplayManager::class.java)
+            .getDisplay(android.view.Display.DEFAULT_DISPLAY)
+        val context = createDisplayContext(display)
+            .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
+        windows = context.getSystemService(WindowManager::class.java)
+        val clock = ClockProvider(SystemClock::elapsedRealtimeNanos)
+        val engine = TimeEngine(clock)
+        val view = OverlayClockView(context, engine,
+            allowed = { Settings.canDrawOverlays(this) && interactive() },
+            stop = { shutdown("权限被撤销或屏幕不可交互，已停止") },
+            move = { dx, dy -> params.x += dx; params.y += dy; updateWindow() },
+            resize = { updateWindow() },
+        )
+        clockView = view
+        windows.addView(view, params)
+        registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        receiverRegistered = true
+        getSystemService(AppOpsManager::class.java).startWatchingMode(
+            AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, packageName, permissionListener)
+        watchingPermissions = true
+        check(Settings.canDrawOverlays(this) && interactive())
+        OverlayState.onConfigChanged = { view.configurationChanged(); updateWindow() }
+        // The synthetic source completes without I/O. Future network work stays outside frame callbacks.
+        scope.launch {
+            try { engine.calibrate(PlatformId.entries.toSet(), DemoTimeSource(clock)) }
+            catch (_: Exception) { shutdown("模拟校准失败，已停止") }
+        }
+        updateWindow()
+    }
+
+    private fun updateWindow() {
+        val view = clockView ?: return
+        if (!view.isAttachedToWindow) return
+        val bounds = windows.currentWindowMetrics.bounds
+        val insets = windows.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(
+            android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+        params.x = params.x.coerceIn(0, (bounds.width() - insets.left - insets.right - view.desiredWidth).coerceAtLeast(0))
+        params.y = params.y.coerceIn(0, (bounds.height() - insets.top - insets.bottom - view.desiredHeight).coerceAtLeast(0))
+        try { windows.updateViewLayout(view, params) }
+        catch (_: RuntimeException) { shutdown("窗口更新失败，已停止") }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        clockView?.configurationChanged()
+        updateWindow()
+    }
+
+    private fun releaseResources() {
+        OverlayState.onConfigChanged = null
+        clockView?.let { view ->
+            view.dispose()
+            try { if (view.isAttachedToWindow) windows.removeViewImmediate(view) }
+            catch (_: IllegalArgumentException) { /* Already removed by the system. */ }
+        }
+        clockView = null
+        if (receiverRegistered) { unregisterReceiver(screenReceiver); receiverRegistered = false }
+        if (watchingPermissions) {
+            getSystemService(AppOpsManager::class.java).stopWatchingMode(permissionListener)
+            watchingPermissions = false
+        }
+        mainHandler.removeCallbacksAndMessages(null)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+    }
+
+    private fun shutdown(message: String) {
+        OverlayState.requested = false
+        OverlayState.running = false
+        OverlayState.message = message
+        OverlayState.fps = 0.0
+        scope.cancel()
+        session.stop()
+        stopSelf()
+    }
+
+    override fun onDestroy() {
+        shutdown(if (OverlayState.running) "已停止" else OverlayState.message)
+        super.onDestroy()
+    }
+
+    companion object {
+        internal const val ACTION_START = "io.github.floatingclock.START"
+        internal const val ACTION_STOP = "io.github.floatingclock.STOP"
+    }
+}

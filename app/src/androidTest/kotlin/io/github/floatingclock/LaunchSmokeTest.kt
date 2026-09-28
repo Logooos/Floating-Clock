@@ -25,7 +25,7 @@ class LaunchSmokeTest {
         compose.onNodeWithText(compose.activity.getString(R.string.development_version, BuildConfig.VERSION_NAME))
             .assertIsDisplayed()
         compose.onNodeWithText(compose.activity.getString(R.string.demo_notice)).assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.overlay_placeholder))
+        compose.onNodeWithText("未启动")
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(compose.activity.getString(R.string.demo_platform))
             .performScrollTo().assertIsDisplayed()
