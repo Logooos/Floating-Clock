@@ -156,22 +156,22 @@ internal fun HomeScreen(
                         Text(status, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
                             color = if (warning) colors.onErrorContainer else colors.onPrimaryContainer)
                     }
+                    if (warning) {
+                        Surface(modifier = Modifier.fillMaxWidth(), shape = HomeDesign.control, color = colors.errorContainer) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(if (state.anchorUsable && !readFailed) "正在使用上次基准" else "当前没有可信时间", color = colors.onErrorContainer,
+                                    style = MaterialTheme.typography.labelLarge)
+                                Text("${if (readFailed) "时间推演不可用，等待新的校准" else state.failureReason ?: "当前来源未能完成校准"}。仅重试原来源，不自动切换。",
+                                    color = colors.onErrorContainer, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                     Text("公共网络时钟", style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant)
                     HomeClock(engine, state, preferences, running, active) { readFailed = true }
                     HorizontalDivider(color = colors.outlineVariant)
                     Text(if (running) homeSource(state) else "尚未校准", style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
                     Text("精度未验证", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                }
-            }
-            if (warning) {
-                Surface(modifier = Modifier.fillMaxWidth(), shape = HomeDesign.control, color = colors.errorContainer) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(if (state.anchorUsable && !readFailed) "正在使用上次基准" else "当前没有可信时间", color = colors.onErrorContainer,
-                            style = MaterialTheme.typography.titleMedium)
-                        Text("${if (readFailed) "时间推演不可用，等待新的校准" else state.failureReason ?: "当前来源未能完成校准"}。仅重试原来源，不自动切换。",
-                            color = colors.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
-                    }
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

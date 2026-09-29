@@ -110,6 +110,7 @@ jobs:
         with:
           api-level: ${{ matrix.api }}
           target: google_apis
+          profile: pixel_2
           arch: x86_64
           disable-animations: true
           script: bash .github/scripts/emulator-checks.sh

@@ -19,6 +19,11 @@ core 72、app 34、仪器 29，共 **135 项独立用例**，模拟器矩阵不�
 JUnit XML 确认 core 72、app 34、API 35 仪器 29 项全部通过，失败／错误／跳过均 0；lint 与 APK 构建通过。
 最终受测源文件 SHA-256 与提交前快照一致。逐张检查六张实际 API 35 PNG，失效提示及主操作可见。
 本地 API 31/33 本轮 NOT RUN，待对应代码提交的 CI 矩阵核对。
+首轮 CI `36576032814` 的 build 通过；API 31/33/35 均只在失效提示首屏可见断言失败。
+云端默认 AVD 与本地 Pixel 2 视口不同：修正为将关键失效说明置于主卡片顶部，
+并显式固定矩阵设备 profile 为 pixel_2，使本地与云端截图尺寸可复现；未删除或放宽断言。
+修正后再次完整本地检查通过（4m38s）：core 72、app 34、API 35 仪器 29，失败／跳过均 0；
+lint 与 assemble 通过，修正后深浅色失效截图已检查。
 
 CI 保留 API 31/33/35；API 35 通过 MediaStore 保存截图，测试后拉取六张 PNG，逐个检查存在且非空。
 `home-api35-screenshots` 是截图产物，`floating-clock-debug` 是 Debug APK，测试报告仍单独上传。
