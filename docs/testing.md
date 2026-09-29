@@ -1,6 +1,6 @@
 # 验证记录
 
-最后核对日期：2026-09-29。
+最后核对日期：2026-09-30。
 
 ## v0.6.0-home.1 首页视觉预览
 
@@ -35,6 +35,27 @@ CI 保留 API 31/33/35；API 35 通过 MediaStore 保存截图，测试后拉取
 再异步排入具有明确短按时间戳的事件对，仍断言真实菜单打开、选择和长按拖动；不修改服务或手势业务代码。
 该测试修正后完整本地检查再次通过（2m44s，102 任务，9 执行）：core 72、app 34、API 35 仪器 29，
 失败／错误／跳过均 0；lint 和 APK 构建通过，受测源文件快照一致。
+
+### 最终云端验收
+
+受测提交：`1ba7c3b3f03e5348ed3d7c34abe5c0a225dd34b0`。
+[GitHub Actions 36614503754](https://github.com/Logooos/Floating-Clock/actions/runs/36614503754) 已核对为 success：
+
+| 检查 | 结果 |
+| --- | --- |
+| `testDebugUnitTest`，含 `:core:time:test` | PASS：core 72、app 34 |
+| `lintDebug` / `assembleDebug` | PASS / PASS |
+| API 31 `connectedDebugAndroidTest` | PASS：28 项 |
+| API 33 `connectedDebugAndroidTest` | PASS：29 项 |
+| API 35 `connectedDebugAndroidTest` | PASS：29 项 |
+| 六张 API 35 首页 PNG | PASS：浅／深色 × 停止／正常／失效，逐文件非空检查 |
+
+所有 JUnit 计数的 failures/errors/skipped 均为 0；API 31 不适用的通知用例不计入执行数。
+下载 [Debug APK](https://github.com/Logooos/Floating-Clock/actions/runs/36614503754/artifacts/11054892025)
+或 [API 35 截图](https://github.com/Logooos/Floating-Clock/actions/runs/36614503754/artifacts/11053864678)，可能需要 GitHub 登录。
+APK 产物为 `floating-clock-debug`，截图产物为 `home-api35-screenshots`，均属于上述同一提交。
+记录这些最终结果的后续提交仅修改本文，使用 `[skip ci]`；不得把该文档提交当成重新测试过的代码。
+预览版未发布正式 Release。Debug 临时签名可能无法覆盖旧测试版；卸载旧版会丢失本地数据。
 
 本轮未修改校时算法、网络适配器、悬浮服务、DataStore、Room Schema 或迁移。首页是现有会话的只读消费者，
 不会创建新校准会话，停止时不显示历史基准。版本为预览版本而非完整 v0.6.0。
