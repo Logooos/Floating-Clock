@@ -2,6 +2,51 @@
 
 最后核对日期：2026-09-29。
 
+## v0.5.0 验证
+
+基线 main 为 `33d48d7675e55d9c6ea030b57f913afa3016797c`（v0.4.0 验证文档）；
+对应已验证代码为 `3538286a7e15b52d9bdbd180df42299939058c91`。
+保留原 100 项测试，目前新增 29 项：core 72、app 31、仪器 26，共 129 项独立用例。
+这些是源码用例数，最终执行数量以 JUnit XML 为准，API 矩阵不重复计数。
+
+本轮发现现有 WSL Ubuntu 22.04 和可用 KVM，工具链由代理下载到被忽略的 `.tools/`，
+不要求用户安装 Android Studio。使用官方 JDK 17、SDK 36、Gradle Wrapper；模拟器无界面运行。
+工具链下载校验后运行；没有提交 SDK 路径、构建输出、测试数据库或导出文件。
+
+首轮代码生成已通过；完整检查的首轮 Debug APK 和测试 APK 构建成功，但整体失败：
+- 既有 HTTP 超时测试强制等待 accept，而 200ms 总超时可在冷 JVM 建连前结束；已将
+  无响应超时与握手后取消分别验证，仍保持原测试的超时／取消覆盖，不使用 sleep。
+- lint 拦截 Compose 直接读取 StateFlow.value；已改为 collectAsState。
+- 上述失败不记为验收通过，修复后重新执行全部检查。
+
+新增覆盖包括配置文件重开、并发事务、损坏恢复、平台约束、单位／时区／共享来源恢复、
+四风格三模式、运行中原窗口改样式、大字体警告区域不缩小、7 天边界及上限、Room 实际迁移与重开、分页导出边界、
+JSON/CSV 转义、未知值、取消、空间／权限／关闭失败、禁用备份及重启不自动校时。
+Schema 1 为开发基线，迁移测试确实创建该版本并通过 Room 校验升级到 2，未伪称旧版本已发布。
+
+第二轮 72 项 core、31 项 app 单元测试、lint 和 APK 构建通过。API 31 实际执行 24 项，
+其中 22 项通过，2 项失败：Room MigrationTestHelper 的序列化运行时被一致性解析降为
+1.7.3，以及 Android 写入器在 flush 失败后未关闭底层流。已对齐序列化 BOM 1.8.1，
+并为原始输出流增加独立 use；最终复验两项均通过。
+本地 API 33/35 镜像准备因官方 SDK 包解压错误失败，未执行该两版本测试；云端矩阵保留。
+
+最终本地通过 WSL 执行 Wrapper，命令为
+`./gradlew testDebugUnitTest lintDebug assembleDebug connectedDebugAndroidTest --continue --max-workers=2 --console=plain --no-daemon`，
+返回 `BUILD SUCCESSFUL`（102 个任务，100 执行、2 个 up-to-date）。
+
+| 检查 | 结果 |
+| --- | --- |
+| `testDebugUnitTest`（含 `:core:time:test`） | PASS：core 72、app 31；失败/错误/跳过均 0 |
+| `lintDebug` | PASS |
+| `assembleDebug` | PASS，Debug APK 已生成 |
+| API 31 `connectedDebugAndroidTest` | PASS：25 项，失败/错误/跳过均 0；API 33+ 通知拒绝用例不适用 |
+| 本地 API 33/35 | NOT RUN：镜像准备失败；由保留的云端矩阵验证 |
+
+JUnit XML 确认新增大字体绘制测试实际执行，最终源文件哈希与构建期间快照一致。
+原 100 项测试名与基线逐项比对，无缺失。提交前检查 diff、机器路径、凭据模式和构建产物，PRD 未修改。
+远端 v0.5.0 CI 在提交推送后核对对应代码 SHA，当前 **未验证**。
+无真机验证、OEM 设备迁移验收、真实文档提供器满盘验收、120FPS 或 50ms 结论。
+
 ## v0.4.0 验证
 
 基线 main 为 ae741ea，v0.3.0 代码 00aee5d 的 CI 全部通过。

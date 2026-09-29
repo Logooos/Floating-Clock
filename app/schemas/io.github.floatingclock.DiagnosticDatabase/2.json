@@ -1,0 +1,130 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "fee5249e20ed402d55b0f54043c90625",
+    "entities": [
+      {
+        "tableName": "diagnostics",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recordedAtUtcMillis` INTEGER NOT NULL, `platformId` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `sourceType` TEXT, `status` TEXT NOT NULL, `failureReason` TEXT, `roundTripNanos` INTEGER, `estimatedOffsetNanos` INTEGER, `uncertaintyNanos` INTEGER, `adjustmentNanos` INTEGER, `lastSuccessUtcMillis` INTEGER, `measuredErrorNanos` INTEGER, `manualSync` INTEGER NOT NULL DEFAULT 0, `sourceRecovered` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedAtUtcMillis",
+            "columnName": "recordedAtUtcMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "platformId",
+            "columnName": "platformId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceType",
+            "columnName": "sourceType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failureReason",
+            "columnName": "failureReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "roundTripNanos",
+            "columnName": "roundTripNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "estimatedOffsetNanos",
+            "columnName": "estimatedOffsetNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "uncertaintyNanos",
+            "columnName": "uncertaintyNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "adjustmentNanos",
+            "columnName": "adjustmentNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastSuccessUtcMillis",
+            "columnName": "lastSuccessUtcMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "measuredErrorNanos",
+            "columnName": "measuredErrorNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "manualSync",
+            "columnName": "manualSync",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "sourceRecovered",
+            "columnName": "sourceRecovered",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_diagnostics_recordedAtUtcMillis",
+            "unique": false,
+            "columnNames": [
+              "recordedAtUtcMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_diagnostics_recordedAtUtcMillis` ON `${TABLE_NAME}` (`recordedAtUtcMillis`)"
+          },
+          {
+            "name": "index_diagnostics_platformId_sourceId",
+            "unique": false,
+            "columnNames": [
+              "platformId",
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_diagnostics_platformId_sourceId` ON `${TABLE_NAME}` (`platformId`, `sourceId`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fee5249e20ed402d55b0f54043c90625')"
+    ]
+  }
+}

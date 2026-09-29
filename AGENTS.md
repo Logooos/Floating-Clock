@@ -45,6 +45,11 @@ Read it before making architectural or behavioral changes.
   and measured error unknown, including in simulated data and test reports.
 - Avoid unnecessary dependencies and premature modularization.
 - Never commit secrets, signing keys or machine-specific SDK paths.
+- Persist user preferences and redacted diagnostic history only; never restore an
+  active monotonic anchor or service state. Loading preferences must not start I/O
+  to time sources. Keep disk data in no-backup storage.
+- Export Room schemas with database changes and test non-destructive migrations.
+  Unknown diagnostic metrics stay nullable; log controlled errors and host-only URLs.
 - Do not introduce product features outside the PRD without approval.
 
 ## Verification

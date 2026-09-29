@@ -16,6 +16,7 @@ import kotlinx.coroutines.*
 
 /** Process-local state, accessed only on the main thread. No service or anchor is persisted. */
 internal object OverlayState {
+    var preferences by mutableStateOf(UserPreferences())
     var config by mutableStateOf(OverlayConfig())
         private set
     var running by mutableStateOf(false)
@@ -113,6 +114,8 @@ class OverlayService : Service() {
         windows = context.getSystemService(WindowManager::class.java)
         val clock = ClockProvider(SystemClock::elapsedRealtimeNanos)
         val engine = TimeEngine(clock)
+        fun applyOffsets() = engine.setOffsets(OverlayState.preferences.globalOffsetMillis, OverlayState.preferences.platformOffsetsMillis)
+        applyOffsets()
         val candidates = NetworkSources.create(OverlayState.sourceChoice, OverlayState.httpUrl, clock)
         OverlayState.timeState = engine.state(PlatformId.TAOBAO_TMALL)
         OverlayState.syncDetails = "初次选源中；未获得锚点前不显示时间"
@@ -121,17 +124,19 @@ class OverlayService : Service() {
             stop = { shutdown("权限被撤销或屏幕不可交互，已停止") },
             move = { dx, dy -> params.x += dx; params.y += dy; updateWindow() },
             resize = { updateWindow() },
+            dragFinished = { savePosition() },
         )
         clockView = view
         windows.addView(view, params)
         windowAdded = true
+        restorePosition()
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
         receiverRegistered = true
         getSystemService(AppOpsManager::class.java).startWatchingMode(
             AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, packageName, permissionListener)
         watchingPermissions = true
         check(Settings.canDrawOverlays(this) && interactive())
-        OverlayState.onConfigChanged = { view.configurationChanged(); updateWindow() }
+        OverlayState.onConfigChanged = { applyOffsets(); view.configurationChanged(); restorePosition(); updateWindow() }
         synchronizer = TimeSynchronizer(engine, clock, candidates, onUpdate = { state, adjustment, interval ->
             OverlayState.timeState = state
             val sample = state.lastSuccess
@@ -147,12 +152,36 @@ class OverlayService : Service() {
                 append("\n不确定度／实测误差：未知；下次自动同步约 ${interval / 1000} 秒")
             }
             view.refreshSourceDetails()
+        }, onSample = { state, adjustment, manual, recovered ->
+            val records = diagnosticRecords(state, adjustment, System.currentTimeMillis(), manual, recovered)
+            AppStorage.work { AppStorage.diagnostics.append(records) }
         }).also { it.start(scope) }
         OverlayState.onSyncNow = {
             synchronizer?.syncNow()
             OverlayState.message = "已请求立即同步；每来源至少间隔 30 秒"
         }
         updateWindow()
+    }
+
+    private fun availablePosition(): Pair<Int, Int> {
+        val view = clockView ?: return 0 to 0
+        val metrics = windows.currentWindowMetrics
+        val insets = metrics.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+        return (metrics.bounds.width() - insets.left - insets.right - view.desiredWidth).coerceAtLeast(0) to
+            (metrics.bounds.height() - insets.top - insets.bottom - view.desiredHeight).coerceAtLeast(0)
+    }
+
+    private fun restorePosition() {
+        val (width, height) = availablePosition()
+        params.x = (width * OverlayState.preferences.positionXRatio).toInt()
+        params.y = (height * OverlayState.preferences.positionYRatio).toInt()
+    }
+
+    private fun savePosition() {
+        val (width, height) = availablePosition()
+        val x = if (width == 0) 0f else params.x.toFloat() / width
+        val y = if (height == 0) 0f else params.y.toFloat() / height
+        AppStorage.update { it.copy(positionXRatio = x, positionYRatio = y) }
     }
 
     private fun updateWindow() {
@@ -199,6 +228,8 @@ class OverlayService : Service() {
         OverlayState.running = false
         OverlayState.message = message
         OverlayState.fps = 0.0
+        OverlayState.timeState = OverlayState.timeState.copy(status = CalibrationStatus.STOPPED, anchorUsable = false, isCalibrating = false)
+        OverlayState.syncDetails = "会话已停止；历史样本不再用于显示，重新启动后重新校准"
         scope.cancel()
         session.stop()
         stopSelf()

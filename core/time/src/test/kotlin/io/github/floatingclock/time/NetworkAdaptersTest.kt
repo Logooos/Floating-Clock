@@ -117,23 +117,25 @@ class NetworkAdaptersTest {
     }
 
     @Test fun httpTimeoutAndCancellationDoNotPublishLateResponses() = runBlocking {
-        for (cancel in listOf(false, true)) {
-            ServerSocket(0, 1, loopback).use { server ->
-                val accepted = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
-                val worker = launch(Dispatchers.IO) {
-                    server.soTimeout = 3000
-                    server.accept().use { accepted.complete(Unit); release.await() }
-                }
-                val request = async {
-                    HttpDateTimeSource(URL("http://127.0.0.1:${server.localPort}/"), FakeClock(),
-                        timeoutMillis = if (cancel) 2000 else 200, allowLoopbackHttp = true).calibrate()
-                }
-                try {
-                    withTimeout(3000) { accepted.await() }
-                    if (cancel) { request.cancelAndJoin(); assertTrue(request.isCancelled) }
-                    else assertTrue(request.await() is CalibrationResult.Failure)
-                } finally { release.complete(Unit); worker.join() }
+        // A short total timeout may expire before connect on a cold JVM. No accept is required.
+        ServerSocket(0, 1, loopback).use { server ->
+            assertTrue(HttpDateTimeSource(URL("http://127.0.0.1:${server.localPort}/"), FakeClock(),
+                timeoutMillis = 200, allowLoopbackHttp = true).calibrate() is CalibrationResult.Failure)
+        }
+        ServerSocket(0, 1, loopback).use { server ->
+            val accepted = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+            val worker = launch(Dispatchers.IO) {
+                server.soTimeout = 10_000
+                server.accept().use { accepted.complete(Unit); release.await() }
             }
+            val request = async {
+                HttpDateTimeSource(URL("http://127.0.0.1:${server.localPort}/"), FakeClock(),
+                    timeoutMillis = 10_000, allowLoopbackHttp = true).calibrate()
+            }
+            try {
+                withTimeout(10_000) { accepted.await() }
+                request.cancelAndJoin(); assertTrue(request.isCancelled)
+            } finally { release.complete(Unit); worker.join() }
         }
     }
 }

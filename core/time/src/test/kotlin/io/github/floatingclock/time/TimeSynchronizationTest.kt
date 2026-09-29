@@ -9,6 +9,28 @@ import org.junit.Test
 import java.util.concurrent.Executors
 
 class TimeSynchronizationTest {
+    @Test fun diagnosticCallbackCapturesInitialFailuresManualAttemptAndRecovery() = runTest {
+        val clock = ClockProvider { testScheduler.currentTime * 1_000_000 }
+        val rejected = healthy(clock, "rejected").apply { response = { CalibrationResult.Failure(sourceId, "offline") } }
+        val source = healthy(clock, "selected")
+        val success = source.response
+        val events = mutableListOf<Triple<String?, Boolean, Boolean>>()
+        val sync = TimeSynchronizer(TimeEngine(clock), clock, listOf(rejected, source), onSample = { state, _, manual, recovered ->
+            events += Triple(state.sourceId, manual, recovered)
+        })
+        sync.start(this); runCurrent()
+        assertEquals(listOf("rejected", "selected"), events.map { it.first })
+        source.response = { CalibrationResult.Failure(source.sourceId, "offline") }
+        sync.syncNow(); runCurrent(); advanceTimeBy(30_000); runCurrent()
+        assertEquals(Triple("selected", true, false), events.last())
+        source.response = success
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(Triple("selected", false, true), events.last())
+        sync.stop()
+        val count = events.size
+        advanceTimeBy(300_000); runCurrent()
+        assertEquals(count, events.size)
+    }
     private val platform = PlatformId.TAOBAO_TMALL
     private fun healthy(clock: ClockProvider, id: String) = FakeTimeSource(clock, id).apply {
         response = { CalibrationResult.Success(sourceId, type, TimeAnchor(1_000_000_000L + clock.elapsedRealtimeNanos(), clock.elapsedRealtimeNanos()), 1_000_000) }

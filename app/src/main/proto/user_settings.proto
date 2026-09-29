@@ -1,0 +1,24 @@
+syntax = "proto3";
+option java_package = "io.github.floatingclock.storage";
+option java_multiple_files = true;
+
+// Only preferences. Never add active anchors, jobs, service state, or pending requests.
+message UserSettings {
+  repeated string selected_platform_ids = 1;
+  sint64 global_offset_millis = 2;
+  map<string, sint64> platform_offset_millis = 3;
+  string zone_id = 4;
+  string source_choice = 5;
+  string http_url = 6;
+  string display_mode = 7;
+  string skin = 8;
+  string font_family = 9;
+  optional float font_size_sp = 10;
+  optional uint32 text_color_argb = 11;
+  optional uint32 background_color_argb = 12;
+  optional float background_opacity = 13;
+  optional float position_x_ratio = 14;
+  optional float position_y_ratio = 15;
+  uint32 schema_version = 16;
+  string manual_source = 17;
+}

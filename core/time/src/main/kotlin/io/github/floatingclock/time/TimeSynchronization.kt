@@ -76,6 +76,7 @@ class TimeSynchronizer(
     private val platforms: Set<PlatformId> = PlatformId.entries.toSet(),
     private val policy: SyncPolicy = SyncPolicy(),
     private val onUpdate: (PlatformTimeState, Long?, Long) -> Unit = { _, _, _ -> },
+    private val onSample: (PlatformTimeState, Long?, Boolean, Boolean) -> Unit = { _, _, _, _ -> },
 ) {
     init { require(candidates.isNotEmpty() && platforms.isNotEmpty()); require(candidates.map { it.sourceId }.distinct().size == candidates.size) }
     private val requests = Channel<Unit>(Channel.CONFLATED)
@@ -85,6 +86,20 @@ class TimeSynchronizer(
     var selectedSourceId: String? = null
         private set
 
+    private suspend fun sample(source: TimeSource, manual: Boolean = false) {
+        val before = engine.state(platforms.first())
+        engine.calibrate(platforms, source)
+        currentCoroutineContext().ensureActive()
+        val after = engine.state(platforms.first())
+        val previous = before.lastSuccess
+        val next = after.lastSuccess.takeIf { after.status == CalibrationStatus.SYNCED }
+        val adjustment = if (previous != null && next != null) runCatching {
+            Math.subtractExact(next.anchor.serverUtcEpochNanos, Math.addExact(previous.anchor.serverUtcEpochNanos,
+                checkedElapsed(previous.anchor.localMonotonicNanos, next.anchor.localMonotonicNanos)))
+        }.getOrNull() else null
+        onSample(after, adjustment, manual, next != null && before.failureReason != null)
+    }
+
     @Synchronized fun start(scope: CoroutineScope) {
         check(!closed)
         if (job != null) return
@@ -93,7 +108,7 @@ class TimeSynchronizer(
             for ((index, source) in candidates.map { JumpCheckedSource(it) }.withIndex()) {
                 ensureActive()
                 if (index > 0) engine.resetFailedInitialSource(platforms)
-                engine.calibrate(platforms, source)
+                sample(source)
                 ensureActive()
                 selected = source
                 if (engine.state(platforms.first()).status == CalibrationStatus.SYNCED) break
@@ -122,7 +137,7 @@ class TimeSynchronizer(
                 }
                 ensureActive()
                 // The selected source object/endpoint stays fixed, including during STALE probing.
-                engine.calibrate(platforms, selected)
+                sample(selected, manual)
                 ensureActive()
             }
         }

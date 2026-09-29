@@ -50,15 +50,16 @@ internal class DemoTimeSource(
 }
 
 @Composable
-internal fun DemoClock(engine: TimeEngine, source: TimeSource, active: Boolean) {
+internal fun DemoClock(engine: TimeEngine, source: TimeSource, active: Boolean, preferences: UserPreferences = UserPreferences()) {
     val lifecycle = (LocalContext.current as LifecycleOwner).lifecycle
     val platform = PlatformId.TAOBAO_TMALL
-    val formatter = remember { MillisecondTimeFormatter() }
+    val formatter = remember(preferences.zoneId) { MillisecondTimeFormatter(java.time.ZoneId.of(preferences.zoneId)) }
     var timeText by remember(engine) { mutableStateOf<String?>(null) }
     var state by remember(engine) { mutableStateOf(PlatformTimeState(platform)) }
 
-    LaunchedEffect(engine, source, active, lifecycle) {
+    LaunchedEffect(engine, source, active, lifecycle, formatter, preferences.globalOffsetMillis, preferences.platformOffsetsMillis) {
         if (!active) return@LaunchedEffect
+        engine.setOffsets(preferences.globalOffsetMillis, preferences.platformOffsetsMillis)
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             if (engine.state(platform).sourceId == null) engine.calibrate(platform, source)
             val readings = TimeReadings()

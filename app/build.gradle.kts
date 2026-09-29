@@ -1,6 +1,11 @@
+import com.google.protobuf.gradle.*
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.protobuf)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -11,8 +16,8 @@ android {
         applicationId = "io.github.floatingclock"
         minSdk = 31
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -27,6 +32,14 @@ android {
 }
 
 dependencies {
+    // Room migration tests inherit the app's serialization runtime; align core and JSON together.
+    implementation(platform(libs.serialization.bom))
+    implementation(libs.datastore)
+    implementation(libs.room.runtime)
+    implementation(libs.protobuf.javalite)
+    ksp(libs.room.compiler)
+    testImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.room.testing)
     implementation(libs.coroutines.android)
     implementation(project(":core:time"))
     implementation(platform(libs.androidx.compose.bom))
@@ -39,6 +52,12 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.junit)
+}
+
+room { schemaDirectory("$projectDir/schemas") }
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.asProvider().get()}" }
+    generateProtoTasks { all().configureEach { builtins { create("java") { option("lite") } } } }
 }
 
 // The pure JVM module has no Android variants; include its tests in the CI entry point.

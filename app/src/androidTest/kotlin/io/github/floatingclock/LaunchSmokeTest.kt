@@ -1,7 +1,7 @@
 package io.github.floatingclock
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
@@ -21,7 +21,11 @@ import io.github.floatingclock.time.TimeEngine
 class LaunchSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
-    @Before fun useOfflineDemo() { compose.runOnUiThread { OverlayState.sourceChoice = SourceChoice.DEMO } }
+    @Before fun useOfflineDemo() {
+        compose.waitUntil(10_000) { AppStorage.ready }
+        kotlinx.coroutines.runBlocking { AppStorage.settings.update { UserPreferences(sourceChoice = SourceChoice.DEMO) } }
+        compose.waitUntil(10_000) { OverlayState.sourceChoice == SourceChoice.DEMO }
+    }
 
     @Test fun launcherShowsDemoHome() {
         compose.onNodeWithText(compose.activity.getString(R.string.app_name)).assertIsDisplayed()
@@ -34,8 +38,8 @@ class LaunchSmokeTest {
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(compose.activity.getString(R.string.demo_accuracy_unknown))
             .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.settings_placeholder))
-            .performScrollTo().assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("设置")
+            .performScrollTo().assertIsDisplayed().assertIsEnabled()
     }
 
     @Test fun injectedMonotonicClockChangesDisplayedTime() {

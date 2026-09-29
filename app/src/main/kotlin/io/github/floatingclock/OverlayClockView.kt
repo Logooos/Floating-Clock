@@ -18,10 +18,11 @@ internal class OverlayClockView(
     private val stop: () -> Unit,
     private val move: (Int, Int) -> Unit,
     private val resize: () -> Unit,
+    private val dragFinished: () -> Unit = {},
 ) : FrameLayout(context), Choreographer.FrameCallback {
     private val choreographer = Choreographer.getInstance()
     private val readings = TimeReadings()
-    private val formatter = MillisecondTimeFormatter()
+    private var formatter = MillisecondTimeFormatter(java.time.ZoneId.of(OverlayState.preferences.zoneId))
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.MONOSPACE }
     private val stats = FrameStats()
     private var disposed = false
@@ -37,12 +38,14 @@ internal class OverlayClockView(
     private var valid = false
     private val density get() = resources.displayMetrics.density
     private fun dp(value: Int) = (value * density).toInt()
-    private val rowHeight get() = when (OverlayState.config.mode) {
+    private val fontHeight get() = (OverlayState.preferences.fontSizeSp * resources.configuration.fontScale).toInt()
+    private val rowHeight get() = (fontHeight - 27).coerceAtLeast(0) + when (OverlayState.config.mode) {
         DisplayMode.FULL -> 100
         DisplayMode.COMPACT -> 66
         DisplayMode.MINIMAL -> 42
     }
-    internal val desiredWidth get() = dp(320).coerceAtMost(resources.displayMetrics.widthPixels)
+    private val contentWidth get() = dp(maxOf(320, (fontHeight * 8.2f).toInt() + 24))
+    internal val desiredWidth get() = contentWidth.coerceAtMost(resources.displayMetrics.widthPixels)
     internal val desiredHeight get() = if (menuOpen) dp(520).coerceAtMost((resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(dp(120)))
         else dp(36 + rowHeight * OverlayState.config.platforms.size).coerceAtMost((resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(dp(80)))
     private val gestures = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
@@ -59,7 +62,7 @@ internal class OverlayClockView(
 
     init {
         setWillNotDraw(false)
-        setBackgroundColor(Color.rgb(25, 29, 35))
+        applyAppearance()
         isClickable = true
         isFocusable = true
         contentDescription = "悬浮时钟，精度未验证。点击选择平台，长按拖动"
@@ -105,29 +108,38 @@ internal class OverlayClockView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (menuOpen) return
-        val scale = (height.toFloat() / dp(36 + rowHeight * OverlayState.config.platforms.size)).coerceAtMost(1f)
-        canvas.scale(scale, scale)
+        // Warnings keep a high-contrast plate even when the clock background is transparent.
+        paint.color = Color.rgb(25, 29, 35)
+        canvas.drawRect(0f, 0f, width.toFloat(), dp(34).toFloat(), paint)
         paint.color = Color.rgb(255, 205, 100)
         paint.textSize = dp(13).toFloat()
-        canvas.drawText(if (OverlayState.sourceChoice == SourceChoice.DEMO) "演示数据 · 精度未验证"
-            else if (valid) readings.state(OverlayState.config.platforms.first()).statusLabel() else "无可信时间 · 精度未验证",
+        val status = if (valid) readings.state(OverlayState.config.platforms.first()).statusLabel() else "无可信时间 · 精度未验证"
+        canvas.drawText(if (OverlayState.sourceChoice == SourceChoice.DEMO) "演示 · $status" else status,
             dp(12).toFloat(), dp(24).toFloat(), paint)
         val config = OverlayState.config
+        val scale = minOf(1f, width.toFloat() / contentWidth,
+            (height - dp(36)).coerceAtLeast(0).toFloat() / dp(rowHeight * config.platforms.size))
+        canvas.save()
+        canvas.translate(0f, dp(36).toFloat())
+        canvas.scale(scale, scale)
+        paint.setShadowLayer(dp(2).toFloat(), 0f, 0f, if (Color.luminance(OverlayState.preferences.textColorArgb) > 0.5f) Color.BLACK else Color.WHITE)
         config.platforms.forEachIndexed { index, platform ->
-            var y = dp(36 + index * rowHeight)
+            var y = dp(index * rowHeight)
             if (config.mode != DisplayMode.MINIMAL) {
-                paint.color = Color.WHITE; paint.textSize = dp(14).toFloat()
+                paint.color = OverlayState.preferences.textColorArgb; paint.textSize = dp(14).toFloat()
                 canvas.drawText(platform.label(), dp(12).toFloat(), (y + dp(16)).toFloat(), paint)
                 y += dp(22)
             }
-            paint.color = Color.WHITE; paint.textSize = dp(27).toFloat()
+            paint.color = OverlayState.preferences.textColorArgb; paint.textSize = dp(fontHeight).toFloat()
             val text = if (valid && readings.hasTime(platform)) formatter.format(readings.shownUtcEpochNanos(platform)) else "无可信时间"
-            canvas.drawText(text, dp(12).toFloat(), (y + dp(28)).toFloat(), paint)
+            canvas.drawText(text, dp(12).toFloat(), (y + dp(fontHeight + 1)).toFloat(), paint)
             if (config.mode == DisplayMode.FULL) {
-                paint.color = Color.LTGRAY; paint.textSize = dp(12).toFloat()
-                canvas.drawText(OverlayState.timeState.sourceLabel(), dp(12).toFloat(), (y + dp(50)).toFloat(), paint)
+                paint.color = OverlayState.preferences.textColorArgb; paint.textSize = dp(12).toFloat()
+                canvas.drawText(OverlayState.timeState.sourceLabel(), dp(12).toFloat(), (y + dp(fontHeight + 23)).toFloat(), paint)
             }
         }
+        paint.clearShadowLayer()
+        canvas.restore()
         if (frameNanos != lastDrawnFrame) {
             lastDrawnFrame = frameNanos
             if (stats.drawn(frameNanos)) OverlayState.fps = stats.fps
@@ -146,7 +158,10 @@ internal class OverlayClockView(
             move((event.rawX - lastX).toInt(), (event.rawY - lastY).toInt())
             lastX = event.rawX; lastY = event.rawY
         }
-        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) dragging = false
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            if (dragging) dragFinished()
+            dragging = false
+        }
         return true
     }
 
@@ -158,9 +173,27 @@ internal class OverlayClockView(
     }
 
     internal fun configurationChanged() {
+        applyAppearance()
         removeAllViews()
         if (menuOpen) buildMenu()
         requestLayout(); invalidate(); updateFrames(); resize()
+    }
+
+    private fun applyAppearance() {
+        val preferences = OverlayState.preferences
+        formatter = MillisecondTimeFormatter(java.time.ZoneId.of(preferences.zoneId))
+        paint.typeface = when (preferences.font) { ClockFont.MONOSPACE -> Typeface.MONOSPACE; ClockFont.SANS -> Typeface.SANS_SERIF; ClockFont.SERIF -> Typeface.SERIF }
+        val opacity = if (preferences.style == VisualStyle.DIGITS) 0 else (preferences.backgroundOpacity * 255).toInt()
+        val color = (preferences.backgroundColorArgb and 0xffffff) or (opacity shl 24)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(color)
+            if (preferences.style == VisualStyle.GLASS) {
+                // Translucent frosted appearance; no screen capture or hidden backdrop-blur API.
+                colors = intArrayOf(color, (color and 0xffffff) or ((opacity * 0.75f).toInt() shl 24))
+                setStroke(dp(1), 0x66ffffff)
+            }
+        }
     }
 
     internal fun refreshSourceDetails() {
@@ -170,7 +203,7 @@ internal class OverlayClockView(
     }
 
     private fun buildMenu() {
-        val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0); setBackgroundColor(Color.rgb(25, 29, 35)) }
         column.addView(TextView(context).apply {
             text = "平台选择（1–3 个）\n${OverlayState.syncDetails}"
             setTextColor(Color.WHITE)
@@ -185,7 +218,7 @@ internal class OverlayClockView(
                 text = platform.label(); setTextColor(Color.WHITE)
                 isChecked = platform in config.platforms
                 isEnabled = if (isChecked) config.platforms.size > 1 else config.platforms.size < 3
-                setOnClickListener { OverlayState.configure(OverlayState.config.toggle(platform)) }
+                setOnClickListener { AppStorage.configure { it.toggle(platform) } }
             })
         }
         config.platforms.forEachIndexed { index, platform ->
@@ -195,7 +228,7 @@ internal class OverlayClockView(
                 row.addView(Button(context).apply {
                     text = label; contentDescription = "${platform.label()}$label"
                     isEnabled = index + direction in config.platforms.indices
-                    setOnClickListener { OverlayState.configure(OverlayState.config.move(platform, direction)) }
+                    setOnClickListener { AppStorage.configure { it.move(platform, direction) } }
                 })
             }
             column.addView(row)

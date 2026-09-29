@@ -122,7 +122,7 @@ class HttpDateTimeSource(
             connection.requestMethod = "HEAD"
             connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0")
             connection.setRequestProperty("Pragma", "no-cache")
-            connection.setRequestProperty("User-Agent", "FloatingClock/0.4.0 (HTTP-Date estimate)")
+            connection.setRequestProperty("User-Agent", "FloatingClock (HTTP-Date estimate)")
             networkIo(connection::disconnect) {
                 val start = clock.elapsedRealtimeNanos()
                 val status = connection.responseCode

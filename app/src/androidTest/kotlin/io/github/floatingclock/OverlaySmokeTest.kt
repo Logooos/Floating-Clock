@@ -65,7 +65,9 @@ class OverlaySmokeTest {
         shell("input keyevent 224"); shell("wm dismiss-keyguard")
         shell("appops set ${BuildConfig.APPLICATION_ID} SYSTEM_ALERT_WINDOW allow")
         shell("appops set ${BuildConfig.APPLICATION_ID} POST_NOTIFICATION allow")
-        main { OverlayState.configure(OverlayConfig()); OverlayState.sourceChoice = SourceChoice.DEMO }
+        await { AppStorage.ready }
+        kotlinx.coroutines.runBlocking { AppStorage.settings.update { UserPreferences(sourceChoice = SourceChoice.DEMO) } }
+        await { OverlayState.sourceChoice == SourceChoice.DEMO && OverlayState.config == OverlayConfig() }
     }
 
     @After fun cleanup() {
@@ -214,5 +216,57 @@ class OverlaySmokeTest {
             (view.parent as android.view.ViewGroup).removeView(view)
             assertFalse(view.frameScheduled)
         }
+    }
+
+    @Test fun styleAndOffsetsUpdateExistingWindowWithoutRecalibration() {
+        start()
+        val view = windows().single()
+        val anchor = OverlayState.timeState.lastSuccess
+        kotlinx.coroutines.runBlocking { AppStorage.settings.update {
+            it.preset(VisualStyle.LIGHT).copy(fontSizeSp = 40f, globalOffsetMillis = -250, zoneId = "UTC")
+        } }
+        await { OverlayState.preferences.fontSizeSp == 40f && view.width > 0 }
+        main { assertSame(view, windows().single()); assertTrue(view.frameScheduled); assertSame(anchor, OverlayState.timeState.lastSuccess) }
+    }
+
+    @Test fun largeFontNeverShrinksWarningPlate() = main {
+        val previous = OverlayState.preferences
+        OverlayState.preferences = UserPreferences(fontSizeSp = 64f).preset(VisualStyle.LIGHT)
+        val view = OverlayClockView(compose.activity, TimeEngine(ClockProvider { 0 }), { true }, {}, { _, _ -> }, {})
+        val bitmap = android.graphics.Bitmap.createBitmap(500, 500, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            view.layout(0, 0, 500, 500)
+            view.draw(android.graphics.Canvas(bitmap))
+            val y = (30 * compose.activity.resources.displayMetrics.density).toInt()
+            assertEquals(android.graphics.Color.rgb(25, 29, 35), bitmap.getPixel(490, y))
+        } finally { view.dispose(); bitmap.recycle(); OverlayState.preferences = previous }
+    }
+
+    @Test fun activityRecreationRestoresPreferencesWithoutStartingRequests() {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        main { NetworkSources.testSource = object : io.github.floatingclock.time.TimeSource {
+            override val sourceId = "test:no-auto-start"
+            override val type = io.github.floatingclock.time.TimeSourceType.NTP
+            override suspend fun calibrate(): io.github.floatingclock.time.CalibrationResult { calls.incrementAndGet(); error("Must not request") }
+        } }
+        kotlinx.coroutines.runBlocking { AppStorage.settings.update { it.copy(zoneId = "UTC", globalOffsetMillis = 321) } }
+        compose.activityRule.scenario.recreate()
+        await { AppStorage.ready && OverlayState.preferences.zoneId == "UTC" }
+        main { assertEquals(321L, OverlayState.preferences.globalOffsetMillis); assertFalse(OverlayState.running); assertEquals(0, calls.get()) }
+    }
+
+    @Test fun manualRestartRequiresFreshCalibrationAfterLock() {
+        start()
+        await { OverlayState.timeState.lastSuccess != null }
+        shell("input keyevent 223")
+        await { !OverlayState.running }
+        shell("input keyevent 224"); shell("wm dismiss-keyguard")
+        main { NetworkSources.testSource = object : io.github.floatingclock.time.TimeSource {
+            override val sourceId = "test:pending"
+            override val type = io.github.floatingclock.time.TimeSourceType.NTP
+            override suspend fun calibrate(): io.github.floatingclock.time.CalibrationResult = kotlinx.coroutines.awaitCancellation()
+        } }
+        start()
+        main { assertNull(OverlayState.timeState.lastSuccess); assertFalse(OverlayState.timeState.anchorUsable) }
     }
 }

@@ -37,6 +37,10 @@ jobs:
       - name: Assemble debug APK
         if: ${{ !cancelled() }}
         run: ./gradlew assembleDebug --stacktrace
+      - name: Verify committed Room schemas
+        run: |
+          git diff --exit-code -- app/schemas
+          test -z "$(git ls-files --others --exclude-standard app/schemas)"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

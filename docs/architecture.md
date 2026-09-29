@@ -1,6 +1,6 @@
 # 时间引擎与悬浮窗架构
 
-v0.4.0 在既有时间引擎和悬浮窗上接入真实网络来源与同源同步策略。
+v0.5.0 复用真实网络来源、同源同步策略、时间引擎和悬浮窗，加入配置、诊断与视觉设置。
 官方时间来源审计见 time-sources.md；未发现满足本地无密钥条件的可接入官方源。
 公共端点的设备网络可达性仍待实测，不声称完成官方精度验收。PRD.md 保持不变。
 
@@ -45,7 +45,7 @@ distribution 校验和固定在 `gradle-wrapper.properties`，CI setup-gradle �
 依赖方向仅为 `app -> core:time`。不提前创建来源、存储、悬浮模块。
 服务注入 `SystemClock.elapsedRealtimeNanos()`，默认使用真实网络来源；所有平台共享一个
 串行采样器。首页提供来源选择、同步、悬浮窗与可选通知授权。显式演示模式才展示固定
-2026-01-01 UTC 起点的模拟时间。来源配置暂不持久化，完整设置仍留待后续。
+2026-01-01 UTC 起点的模拟时间。配置通过 Proto DataStore 持久化，活动锚点始终只在内存。
 
 - `ClockProvider` 只提供单调纳秒，可注入测试虚拟时钟。Android 实现使用
   `SystemClock.elapsedRealtimeNanos()`，包括休眠时间，不能以墙上时间或帧数替代。
@@ -121,7 +121,7 @@ Activity 停止时暂停演示更新；首页预览独立于下述 Choreographer
 悬浮层仍采用单个 `WindowManager` 窗口和 Custom View，帧驱动使用 Choreographer；
 网络采样独立于绘制。锁屏停止采样、帧回调、窗口和服务，解锁不自动重启。
 API 31–32 不调用 API 33 的系统网络时钟；来源失效不能静默切换。
-Proto DataStore / Room 在实际实现配置与诊断时引入，本轮不添加空存储层和依赖。
+Proto DataStore / Room 在 v0.5.0 的实际配置与诊断功能中引入，仍只保留现有两个模块。
 
 ## v0.3.0 悬浮会话
 
@@ -145,7 +145,7 @@ OverlaySession 使启动/停止幂等，并在前台提升或窗口创建失败�
 单个 TYPE_APPLICATION_OVERLAY 窗口内自绘时钟行；菜单是同一容器的原生子控件，
 支持无障碍勾选和上下移动，不创建每平台独立窗口。NOT_FOCUSABLE/NOT_TOUCH_MODAL
 使矩形外的事件交给下层窗口。原生 GestureDetector 判定长按，拖动位置按安全区域夹限。
-旋转后重新布局；本版不持久化配置和位置。
+旋转后重新布局；位置在拖动完成时保存为安全区域剩余可移动范围内的比例。
 
 Choreographer 使用系统 VSYNC，preferredRefreshRate=120 只是偏好，实际节奏由设备决定。
 每次 doFrame 调用一次 readInto，重用 TimeReadings；onDraw 格式化可见行，不复制校时公式。
@@ -178,3 +178,54 @@ Android 层只负责 API 33 门控、公开 DnsResolver 和来源目录。沿用
 不合作的底层调用在返回后也不能覆盖停止前基准；引擎保留既有请求序号保护乱序结果。
 仅使用系统 DNS、DatagramSocket、HttpURLConnection，不新增网络框架或模块。
 没有独立参考测量，所有样本的估计不确定度和实测误差均未知。
+
+## v0.5.0 配置、诊断与导出
+
+依赖固定为 DataStore 1.2.1、Room 2.8.5、KSP 2.3.6、Protobuf 插件 0.10.0
+及 protoc/javalite 4.32.1。序列化运行时约束为 Room 迁移组件声明的 1.8.1，防止 Android
+测试的依赖一致性机制将其降到应用的旧 1.7.3 而触发 AbstractMethodError。
+AGP 9 保持内置 Kotlin；Protobuf Android 任务显式创建
+Java lite 生成器，Room 使用 KSP 与官方 schemaDirectory。未新增业务模块。
+
+- `UserSettings` protobuf 只含稳定枚举 ID、平台顺序、毫秒偏移、时区、会话来源选择、
+  合法 HTTPS URL、视觉参数及安全区域位置比例。字段编号不可复用。
+- `SettingsRepository.update` 使用 DataStore.updateData 在最新值上执行原子变换。
+  解码时去重、截断至三平台、修正未知枚举／时区／非有限数；偏移每项限 ±一天，
+  字号 16–64 sp，透明度和位置比例 0–1。无效 protobuf 由 corruptionHandler 恢复默认。
+  普通磁盘 I/O 失败显示错误，不以“损坏恢复”吞掉真实存储故障。
+- `AppStorage` 进程内各一个仓储，通过 StateFlow 发布配置；UI/窗口操作修改具体字段，
+  不用旧的完整快照覆盖并发修改。初次读取完成前禁止启动。恢复配置不创建时间源或服务。
+- 来源选择仍为会话级共享；当前运行来源不因偏移／字体／平台选择变化而切换。
+  样式更改更新原 Custom View；偏移调用既有引擎 setter；时区只更换格式器。
+  滑块松手保存，拖动结束保存归一化位置。四种风格都保留警告底板；紧凑／极简通过
+  菜单查看完整平台及实际来源。磨砂样式不使用隐藏 API 或屏幕采集来模糊其他应用。
+
+`diagnostics` 表存记录 UTC 毫秒、平台 ID、脱敏来源及类别、状态、受控失败码、可空的
+RTT／估计偏移／不确定度／跳变量／实测误差（纳秒）、历史最后成功 UTC 毫秒、
+manualSync 和 sourceRecovered。实测误差恒为空，失败记录不复制旧成功样本的 RTT。
+单调锚点不入库；五入口关联同一个采样结果，不发起五次请求。TimeSynchronizer 的
+采样回调覆盖初次选源中被拒绝的候选，并区分合并后的手动请求与同源恢复。
+
+Room 数据库当前版本 2；Schema 1 是本阶段开发中的事件字段加入前基线，并非曾发布版本。
+提交两份实际生成的 JSON；1→2 迁移只新增带默认 false 的事件列，不删除旧行或填造未知指标。
+没有 fallbackToDestructiveMigration。记录插入与保留清理为事务，按本机记录墙钟保留 7 天，
+最多 120,000 行；墙钟改变可能影响保留期限，但不会影响时间引擎。未运行时不保证准点清理。
+
+诊断页按平台/来源查询，每页 200 行。导出固定最大 ID 和截止时间，每批读 500 行，
+不持有贯穿文件写入的数据库事务；导出期间清除/到期的数据可能不再出现在后续批次。
+ACTION_CREATE_DOCUMENT 由用户授权目的地，UTF-8 流写入在 Dispatchers.IO。
+取消选择不读数据、不建文件；I/O、空间不足、权限或关闭失败提示失败，可能留下不完整文档。
+JSON 的 records 与 CSV 的 record 行使用相同字段；CSV 首行为列名，随后一次 metadata 行
+（rowType=metadata），再是 rowType=record 的数据行，避免重复字段字典造成大文件。
+两种格式都包含版本、时区、导出 UTC 毫秒、Android API、单位、字段字典与未验证说明。
+CSV 文本统一引号转义并中和公式前缀；数值负偏移仍为数值，未知 JSON=null/CSV=空。
+
+隐私策略：配置及数据库（含 WAL/SHM）均在应用 noBackupFilesDir，allowBackup=false，
+云备份与设备迁移 XML 排除所有应用数据域；不备份设置、不上传诊断，卸载清除数据。
+只导出用户主动选择的诊断文件，不包含配置 URL、Cookie、凭据、路径或设备唯一标识。
+实际 Android/OEM 迁移工具仍需设备侧验证，不能以 Manifest 静态检查代替真机验收。
+
+参考：[DataStore](https://developer.android.com/jetpack/androidx/releases/datastore)、
+[Room](https://developer.android.com/jetpack/androidx/releases/room)、
+[Protobuf 插件](https://github.com/google/protobuf-gradle-plugin/releases)、
+[Android 备份规则](https://developer.android.com/identity/data/autobackup)。
