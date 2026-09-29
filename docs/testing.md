@@ -44,7 +44,24 @@ Schema 1 为开发基线，迁移测试确实创建该版本并通过 Room 校�
 
 JUnit XML 确认新增大字体绘制测试实际执行，最终源文件哈希与构建期间快照一致。
 原 100 项测试名与基线逐项比对，无缺失。提交前检查 diff、机器路径、凭据模式和构建产物，PRD 未修改。
-远端 v0.5.0 CI 在提交推送后核对对应代码 SHA，当前 **未验证**。
+代码及版本提交 `a9ac7b9a70f01164f250221919ad08c82a84ea3c` 已推送 main，对应
+[Android CI 36541244158](https://github.com/Logooos/Floating-Clock/actions/runs/36541244158)
+整体和全部四个任务均为 **success**。逐项核对工作流的 JUnit 公告：
+
+| 云端环境 | 检查与结果 |
+| --- | --- |
+| build / JDK 17 / SDK 36 | `testDebugUnitTest`：core 72、app 31，全部通过；`lintDebug`、`assembleDebug`、提交的 Room Schema 一致性检查通过 |
+| API 31 | `connectedDebugAndroidTest`：25 项通过，通知拒绝用例不适用 |
+| API 33 | 同上：26 项通过 |
+| API 35 | 同上：26 项通过 |
+
+各报告失败、错误、跳过均为 0；129 项独立用例全部在适用环境得到验证。
+产物：floating-clock-debug（11020922092，归档 10,913,571 字节）、android-check-reports
+（11020612809）、API 31/33/35 报告（11020418450、11020823553、11020963090）。
+从上述 CI 页面下载。API 31 另做了已构建 APK 的设置页外观核对；没有启动公共网络同步。
+
+后续验证记录提交只修改此文档并使用 `[skip ci]`；上述 SHA 才是受测代码及版本提交。
+工作流对现有 Action v4 给出 Node 20/setup-java v4 弃用警告，本轮运行通过，后续应单独升级验证。
 无真机验证、OEM 设备迁移验收、真实文档提供器满盘验收、120FPS 或 50ms 结论。
 
 ## v0.4.0 验证
