@@ -112,7 +112,14 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest --stacktrace
+          script: bash .github/scripts/emulator-checks.sh
+      - name: Upload homepage light and dark screenshots
+        if: matrix.api == 35 && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-api35-screenshots
+          path: app/build/outputs/home-screenshots/
+          if-no-files-found: error
       - name: Publish emulator test counts and failures
         if: always()
         run: |

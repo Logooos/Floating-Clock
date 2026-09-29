@@ -2,6 +2,33 @@
 
 最后核对日期：2026-09-29。
 
+## v0.6.0-home.1 首页视觉预览
+
+本轮仅实现 A「静谧卡片」首页。基线代码为 `a9ac7b9a70f01164f250221919ad08c82a84ea3c`，
+基线文档 main 为 `8ad56a7607e0e3262e0270c5c5093eee60781267`。保留原 129 项测试，新增 6 项：
+core 72、app 34、仪器 29，共 **135 项独立用例**，模拟器矩阵不重复计数。
+
+新增覆盖首页状态映射、实际来源标签、偏移与锚点门控、虚拟单调时钟推进／停止清空、
+主按钮启动／停止原服务，以及浅／深色 × 停止／正常／失效的真实 Compose 渲染。
+截图测试使用注入的固定时钟和真实 TimeEngine，显式标注“离线截图样例 · 模拟校准”；
+截图不证明访问了公共时间源，也不证明误差或帧率。可安装 APK 继续使用用户配置的真实来源。
+
+本地使用现有 WSL、隔离工具链和 API 35 无界面模拟器，命令：
+`./gradlew testDebugUnitTest lintDebug assembleDebug connectedDebugAndroidTest --continue --max-workers=2 --console=plain --no-daemon`。
+首轮四项全部通过。检查实际截图后收紧首页间距，最终复验返回 BUILD SUCCESSFUL（102 个任务，20 执行、82 up-to-date）。
+JUnit XML 确认 core 72、app 34、API 35 仪器 29 项全部通过，失败／错误／跳过均 0；lint 与 APK 构建通过。
+最终受测源文件 SHA-256 与提交前快照一致。逐张检查六张实际 API 35 PNG，失效提示及主操作可见。
+本地 API 31/33 本轮 NOT RUN，待对应代码提交的 CI 矩阵核对。
+
+CI 保留 API 31/33/35；API 35 通过 MediaStore 保存截图，测试后拉取六张 PNG，逐个检查存在且非空。
+`home-api35-screenshots` 是截图产物，`floating-clock-debug` 是 Debug APK，测试报告仍单独上传。
+本地与 CI 的测试均不要求真实公网。API 31 的通知拒绝用例不适用，预期执行 28 项。
+
+本轮未修改校时算法、网络适配器、悬浮服务、DataStore、Room Schema 或迁移。首页是现有会话的只读消费者，
+不会创建新校准会话，停止时不显示历史基准。版本为预览版本而非完整 v0.6.0。
+真机视觉确认、TalkBack、200% 字体完整页面检查、厂商系统适配与覆盖安装：NOT RUN。
+不声称真机 120FPS 或 50ms 精度通过；完整预设迁移、其他页面和悬浮标签重构等待用户确认。
+
 ## v0.5.0 验证
 
 基线 main 为 `33d48d7675e55d9c6ea030b57f913afa3016797c`（v0.4.0 验证文档）；

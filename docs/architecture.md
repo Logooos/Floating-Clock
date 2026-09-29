@@ -229,3 +229,17 @@ CSV 文本统一引号转义并中和公式前缀；数值负偏移仍为数值�
 [Room](https://developer.android.com/jetpack/androidx/releases/room)、
 [Protobuf 插件](https://github.com/google/protobuf-gradle-plugin/releases)、
 [Android 备份规则](https://developer.android.com/identity/data/autobackup)。
+
+
+## v0.6.0-home.1 首页样板
+
+仅 MainActivity 首页及 HomeScreen 重构；旧设置和诊断页面继续复用，服务、存储与 core 未变。
+首页接收 OverlayState 的当前会话不可变快照，并调用既有 TimeEngine.shownUtcEpochNanos
+只读低层 API；不创建采样器，不复制 UTC 推演公式。活动且运行、anchorUsable 时才用 Compose
+帧时钟安排读取，读取用 elapsedRealtimeNanos 而非帧时间；离开首页、后台或停止后取消读数。
+数值异常结束本次展示循环，等待新的会话快照，不把缓存当当前时间。偏移取原第一行预设与全局之和。
+
+HomeTheme 定义 A 方向深浅语义色、字号与形状；系统主题切换不保存新偏好，DataStore 无修改。
+本轮没有公共行迁移，也没有更改悬浮窗的极简显示。确认过的完整设计是后续方向，非本轮功能清单。
+API 35 仪器测试通过真实 TimeEngine 校准假源生成六种首页截图；PNG 经 MediaStore 存入模拟器
+Pictures/FloatingClock，CI 拉取并上传，测试应用卸载后仍可收集。正式 APK 不包含截图状态入口。

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -29,15 +30,10 @@ class LaunchSmokeTest {
 
     @Test fun launcherShowsDemoHome() {
         compose.onNodeWithText(compose.activity.getString(R.string.app_name)).assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.development_version, BuildConfig.VERSION_NAME))
-            .assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.demo_notice)).assertIsDisplayed()
-        compose.onNodeWithText("未启动")
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.demo_platform))
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.demo_accuracy_unknown))
-            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("演示数据 · 非真实网络校时").assertIsDisplayed()
+        compose.onNodeWithText("已停止").assertIsDisplayed()
+        compose.onNodeWithText("精度未验证").assertIsDisplayed()
+        compose.onNodeWithTag("home-clock").assertContentDescriptionEquals("当前时间 --:--:--.---")
         compose.onNodeWithText("设置")
             .performScrollTo().assertIsDisplayed().assertIsEnabled()
     }

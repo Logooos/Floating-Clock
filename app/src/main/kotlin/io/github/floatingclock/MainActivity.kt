@@ -25,12 +25,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import io.github.floatingclock.time.*
-import java.util.Locale
+import androidx.compose.runtime.saveable.rememberSaveable
 
 class MainActivity : ComponentActivity() {
     private val clock = ClockProvider(SystemClock::elapsedRealtimeNanos)
     private val engine = TimeEngine(clock)
-    private val demoSource = DemoTimeSource(clock)
     private var active by mutableStateOf(false)
     private var overlayGranted by mutableStateOf(false)
     private var notificationsGranted by mutableStateOf(false)
@@ -41,48 +40,36 @@ class MainActivity : ComponentActivity() {
         AppStorage.initialize(this)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
-                var page by remember { mutableStateOf("home") }
-                BackHandler(page != "home") { page = "home" }
+            var page by rememberSaveable { mutableStateOf("home") }
+            BackHandler(page != "home") { page = "home" }
+            if (page == "home") HomeTheme {
+                HomeScreen(engine, OverlayState.timeState, OverlayState.preferences,
+                    OverlayState.running, OverlayState.requested, active, AppStorage.ready,
+                    overlayGranted, notificationsGranted, OverlayState.message, AppStorage.error,
+                    start = ::startOverlay, stop = ::stopOverlay, grantOverlay = ::requestOverlay,
+                    grantNotifications = {
+                        if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        else startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    },
+                    sync = { OverlayState.onSyncNow?.invoke() }, settings = { page = "settings" }, diagnostics = { page = "diagnostics" })
+            } else MaterialTheme {
                 Scaffold { insets ->
                     Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
                         Text(stringResource(R.string.development_version, BuildConfig.VERSION_NAME))
                         AppStorage.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        if (page != "home") TextButton(onClick = { page = "home" }) { Text("返回首页") }
-                        if (page == "settings") SettingsPage()
-                        else if (page == "diagnostics") DiagnosticsPage()
-                        else {
-                        if (OverlayState.sourceChoice == SourceChoice.DEMO) Text(stringResource(R.string.demo_notice), color = MaterialTheme.colorScheme.primary)
-                        else Text("平台仅用于分组；公共网络时间不是购物平台官方时间。")
-                        Text("悬浮窗权限：${if (overlayGranted) "已授予" else "未授予"}")
-                        Text(OverlayState.message)
-                        Button(onClick = {
-                            try { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
-                            catch (_: RuntimeException) { OverlayState.message = "无法打开系统授权页，请在系统设置中授予悬浮窗权限" }
-                        }) { Text("申请悬浮窗权限") }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = ::startOverlay, enabled = !OverlayState.requested && !OverlayState.running) { Text("启动悬浮窗") }
-                            Button(onClick = ::stopOverlay, enabled = OverlayState.requested || OverlayState.running) { Text("停止悬浮窗") }
-                        }
-                        Text(if (notificationsGranted) "通知已允许，可从通知停止" else "通知未允许；仍可从本页停止悬浮窗")
-                        if (Build.VERSION.SDK_INT >= 33 && !notificationsGranted) {
-                            TextButton(onClick = { notifications.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text("允许通知（可选）") }
-                        }
-                        Text(String.format(Locale.ROOT, "实绘 FPS：%.1f（非精度指标）", OverlayState.fps))
-                        Text("部分应用会隐藏悬浮窗；锁屏停止，解锁不自动恢复。")
-                        SourceControls()
-                        PlatformControls()
-                        if (OverlayState.sourceChoice == SourceChoice.DEMO) DemoClock(engine, demoSource, active, OverlayState.preferences)
-                        Text(stringResource(R.string.accuracy_notice))
-                        Button(onClick = { page = "settings" }, enabled = AppStorage.ready) { Text("设置") }
-                        Button(onClick = { page = "diagnostics" }, enabled = AppStorage.ready) { Text("校时诊断与导出") }
-                        }
+                        TextButton(onClick = { page = "home" }) { Text("返回首页") }
+                        if (page == "settings") SettingsPage() else DiagnosticsPage()
                     }
                 }
             }
         }
+    }
+
+    private fun requestOverlay() {
+        try { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
+        catch (_: RuntimeException) { OverlayState.message = "无法打开系统授权页，请在系统设置中授予悬浮窗权限" }
     }
 
     private fun refreshPermissions() {
