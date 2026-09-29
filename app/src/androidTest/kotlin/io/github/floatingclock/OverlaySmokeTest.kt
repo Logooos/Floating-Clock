@@ -160,13 +160,15 @@ class OverlaySmokeTest {
     @Test fun clickMenuChangesSelectionAndLongPressDrags() {
         start()
         compose.waitUntil(10_000) { windows().size == 1 }
+        await { OverlayState.fps > 0 } // Attached/layout alone does not mean the overlay has presented frames.
         val before = windowBounds()
         val tapTime = SystemClock.uptimeMillis()
         for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
-            val event = MotionEvent.obtain(tapTime, SystemClock.uptimeMillis(), action,
+            val event = MotionEvent.obtain(tapTime, tapTime + if (action == MotionEvent.ACTION_UP) 50 else 0, action,
                 before.centerX().toFloat(), before.centerY().toFloat(), 0)
             event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-            assertTrue("Touch injection failed", automation.injectInputEvent(event, true))
+            // Queue the tap pair without waiting for a slow emulator render between DOWN and UP.
+            assertTrue("Touch injection failed", automation.injectInputEvent(event, false))
             event.recycle()
         }
         await { windows().single().menuOpen }
