@@ -18,7 +18,15 @@ fixture 提示不进入生产首页参数或布局；测试身份在 MediaStore 
 使用已有隔离 WSL 工具链与 API 35 Pixel 2 模拟器；本轮 API 31/33 本地 NOT RUN，由 CI 矩阵执行。
 本地返回 BUILD SUCCESSFUL（6m26s，102 个任务，34 执行）；core 72、app 34、API 35 仪器 30 项全部通过，
 失败／错误／跳过均 0。lint 与 APK 构建通过；六张 PNG 逐张检查完成，受测源码 SHA-256 快照一致。
-远端 CI 结果及受测提交待下方记录。真机视觉、TalkBack、200% 字体完整页面、120FPS 与实测精度：NOT RUN。
+远端 [CI 36657211165](https://github.com/Logooos/Floating-Clock/actions/runs/36657211165) 全部通过，
+对应受测代码 `8ec10482b7ffdf510c8de5ced4f86fd819b1afdc`：core 72、app 34；API 31 为 29 项、API 33/35 各 30 项，
+failures/errors/skipped 均为 0；lint、assemble 和六张截图存在性检查均通过。
+[Debug APK](https://github.com/Logooos/Floating-Clock/actions/runs/36657211165/artifacts/11072743969)
+与 [六张 API 35 截图](https://github.com/Logooos/Floating-Clock/actions/runs/36657211165/artifacts/11072503317)
+属于同一代码提交；下载可能需要 GitHub 登录。截图为离线模拟校准，标识在产物 README，不是实测精度证明。
+本次最终结果记录为后续纯文档提交 `[skip ci]`，不将该文档提交计作再次编译验证。
+真机视觉、TalkBack、200% 字体完整页面、覆盖安装、120FPS 与实测精度：NOT RUN。
+版本为 v0.6.0-home.2 / versionCode 7；不创建正式 Release，等待用户确认再开展其他页面。
 
 ## v0.6.0-home.1 首页视觉预览
 
