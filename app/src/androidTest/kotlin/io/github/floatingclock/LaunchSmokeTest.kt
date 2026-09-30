@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertTextEquals
@@ -36,6 +38,19 @@ class LaunchSmokeTest {
         compose.onNodeWithTag("home-clock").assertContentDescriptionEquals("当前时间 --:--:--.---")
         compose.onNodeWithText("设置")
             .performScrollTo().assertIsDisplayed().assertIsEnabled()
+    }
+
+    @Test fun homeNavigationShellReusesExistingPagesAndReturnsWithoutStartingService() {
+        compose.onNodeWithTag("home-nav-0").assertIsSelected()
+        compose.onNodeWithTag("home-nav-1").performClick()
+        compose.onNodeWithText("视觉与时间设置").assertIsDisplayed()
+        compose.onNodeWithText("返回首页").performClick()
+        compose.onNodeWithTag("home-nav-2").performClick()
+        compose.onNodeWithText("校时诊断").assertIsDisplayed()
+        compose.onNodeWithText("返回首页").performClick()
+        compose.onNodeWithTag("home-nav-0").assertIsSelected()
+        org.junit.Assert.assertFalse(OverlayState.running)
+        org.junit.Assert.assertFalse(OverlayState.requested)
     }
 
     @Test fun injectedMonotonicClockChangesDisplayedTime() {

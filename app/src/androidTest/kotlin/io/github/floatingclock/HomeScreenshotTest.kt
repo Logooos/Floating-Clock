@@ -41,7 +41,7 @@ class HomeScreenshotTest {
                 HomeTheme(dark) {
                     HomeScreen(engine, engine.state(platform), UserPreferences(), mode != "stopped", false,
                         true, true, true, true, "已停止", null,
-                        {}, {}, {}, {}, {}, {}, {}, fixtureLabel = "离线截图样例 · 模拟校准")
+                        {}, {}, {}, {}, {}, {}, {})
                 }
             } }
             compose.mainClock.advanceTimeBy(100)
@@ -49,7 +49,11 @@ class HomeScreenshotTest {
                 if (mode == "stopped") "当前时间 --:--:--.---" else "当前时间 17:02:35.218")
             compose.onNodeWithText("精度未验证").assertIsDisplayed()
             compose.onNodeWithTag("home-primary").assertIsDisplayed()
-            if (mode == "stale") compose.onNodeWithText("正在使用上次基准").assertIsDisplayed()
+            compose.onNodeWithTag("home-nav-0").assertIsSelected().assertIsDisplayed()
+            compose.onNodeWithTag("home-offset-zero").assertIsDisplayed()
+            compose.onNodeWithText("离线截图样例", substring = true).assertDoesNotExist()
+            if (mode == "synced") compose.onNodeWithText("校准正常").assertDoesNotExist()
+            if (mode == "stale") compose.onNodeWithTag("home-warning").assertIsDisplayed()
             if (Build.VERSION.SDK_INT == 35) saveImage("home-${if (dark) "dark" else "light"}-$mode.png")
         }
     }
@@ -62,9 +66,10 @@ class HomeScreenshotTest {
         runBlocking { engine.calibrate(PlatformId.TAOBAO_TMALL, DemoTimeSource(clock, 0)) }
         val state = engine.state(PlatformId.TAOBAO_TMALL)
         val running = androidx.compose.runtime.mutableStateOf(true)
+        val preferences = androidx.compose.runtime.mutableStateOf(UserPreferences())
         compose.runOnUiThread { compose.activity.setContent {
             HomeTheme {
-                HomeScreen(engine, state, UserPreferences(), running.value, false, true, true,
+                HomeScreen(engine, state, preferences.value, running.value, false, true, true,
                     true, true, "", null, {}, {}, {}, {}, {}, {}, {})
             }
         } }
@@ -76,6 +81,11 @@ class HomeScreenshotTest {
         compose.runOnUiThread { running.value = false }
         compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithTag("home-clock").assertContentDescriptionEquals("当前时间 --:--:--.---")
+        compose.runOnUiThread { preferences.value = UserPreferences(globalOffsetMillis = -15) }
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithTag("home-offset-active").assertIsDisplayed()
+        compose.onNodeWithText("-15 ms").assertIsDisplayed()
+        compose.onNodeWithTag("home-offset-zero").assertDoesNotExist()
         assertSame(state.lastSuccess, engine.state(PlatformId.TAOBAO_TMALL).lastSuccess)
     }
 
@@ -85,6 +95,7 @@ class HomeScreenshotTest {
         val uri = checkNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.DESCRIPTION, "Offline UI fixture; simulated calibration, not a precision measurement")
             put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/FloatingClock")
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }))

@@ -12,11 +12,12 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = "35" ]; then
     done
   done
   cat > "$destination/README.txt" <<EOF
-Floating Clock 0.6.0-home.1 — homepage visual preview only
+Floating Clock 0.6.0-home.2 — homepage visual preview only
 Code commit: ${GITHUB_SHA:-local}
 Renderer: API 35 emulator, real Jetpack Compose UI and TimeEngine.
 Six deterministic fixtures: light/dark x stopped/synced/stale.
-The fixture badge means simulated calibration; these are not public-network measurements.
+TEST FIXTURES ONLY: all six screenshots use simulated calibration, not public-network measurements.
+Fixture identifiers live in this manifest and MediaStore metadata, not in production page layout.
 APK in the separate floating-clock-debug artifact uses real configured sources.
 Existing settings, service, network adapters and storage remain unchanged.
 No physical-device 120 FPS or 50 ms accuracy claim.

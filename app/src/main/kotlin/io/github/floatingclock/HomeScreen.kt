@@ -1,5 +1,6 @@
 package io.github.floatingclock
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -36,7 +38,7 @@ import java.util.Locale
 private val LightHome = lightColorScheme(
     primary = Color(0xff0b57d0), onPrimary = Color.White,
     primaryContainer = Color(0xffe6eeff), onPrimaryContainer = Color(0xff17478e),
-    background = Color(0xfff5f7fa), surface = Color(0xfff5f7fa),
+    background = Color(0xffeef2f6), surface = Color(0xffeef2f6),
     surfaceContainer = Color.White, onSurface = Color(0xff17212b),
     onSurfaceVariant = Color(0xff475569), outline = Color(0xff64748b),
     outlineVariant = Color(0xffdce3ec), error = Color(0xffb3261e),
@@ -56,7 +58,7 @@ internal object HomeDesign {
     val section = 24.dp
     val gap = 8.dp
     val card = RoundedCornerShape(24.dp)
-    val control = RoundedCornerShape(16.dp)
+    val control = RoundedCornerShape(12.dp)
 }
 
 @Composable
@@ -104,7 +106,6 @@ internal fun HomeScreen(
     overlayGranted: Boolean, notificationsGranted: Boolean, message: String, storageError: String?,
     start: () -> Unit, stop: () -> Unit, grantOverlay: () -> Unit, grantNotifications: () -> Unit,
     sync: () -> Unit, settings: () -> Unit, diagnostics: () -> Unit,
-    fixtureLabel: String? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     var readFailed by remember(state, running) { mutableStateOf(false) }
@@ -117,90 +118,100 @@ internal fun HomeScreen(
     Scaffold(containerColor = colors.background,
         bottomBar = {
             Surface(color = colors.background) {
-                Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = HomeDesign.gutter).padding(top = 8.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(HomeDesign.gap)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(HomeDesign.gap)) {
-                        OutlinedButton(onClick = sync, enabled = running && !state.isCalibrating,
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = HomeDesign.control) { Text("重新校准") }
-                        OutlinedButton(onClick = diagnostics, enabled = ready,
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = HomeDesign.control) { Text("校时诊断") }
+                Column {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = HomeDesign.gutter).padding(top = 8.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(HomeDesign.gap)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(HomeDesign.gap)) {
+                            OutlinedButton(onClick = sync, enabled = running && !state.isCalibrating,
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = HomeDesign.control) { Text("重新校准") }
+                            Button(onClick = { when { running || requested -> stop(); !overlayGranted -> grantOverlay(); else -> start() } },
+                                enabled = ready || running || requested,
+                                modifier = Modifier.weight(1.4f).heightIn(min = 48.dp).testTag("home-primary"), shape = HomeDesign.control) {
+                                Text(when { running || requested -> "停止悬浮窗"; !overlayGranted -> "授予悬浮权限"; else -> "开启悬浮窗" })
+                            }
+                        }
+                        Text("锁屏后停止 · 解锁不自动恢复", Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     }
-                    Button(onClick = { when { running || requested -> stop(); !overlayGranted -> grantOverlay(); else -> start() } },
-                        enabled = ready || running || requested,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("home-primary"), shape = HomeDesign.control) {
-                        Text(when { running || requested -> "停止悬浮窗"; !overlayGranted -> "授予悬浮权限"; else -> "开启悬浮窗" },
-                            style = MaterialTheme.typography.titleMedium)
+                    HorizontalDivider(color = colors.outlineVariant)
+                    NavigationBar(containerColor = colors.surfaceContainer, tonalElevation = 0.dp) {
+                        listOf("时钟", "外观", "诊断").forEachIndexed { index, label ->
+                            NavigationBarItem(selected = index == 0, enabled = index == 0 || ready,
+                                onClick = { when (index) { 1 -> settings(); 2 -> diagnostics() } },
+                                icon = { HomeNavIcon(index) }, label = { Text(label) },
+                                modifier = Modifier.testTag("home-nav-$index"),
+                                colors = NavigationBarItemDefaults.colors(indicatorColor = colors.primaryContainer,
+                                    selectedIconColor = colors.primary, selectedTextColor = colors.primary,
+                                    unselectedIconColor = colors.onSurfaceVariant, unselectedTextColor = colors.onSurfaceVariant))
+                        }
                     }
-                    Text("锁屏后停止 · 解锁不自动恢复", Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
             }
         }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
             .padding(horizontal = HomeDesign.gutter).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                ClockMark()
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Floating Clock", style = MaterialTheme.typography.titleLarge)
-                    Text("来源透明，让时间一目了然", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Floating Clock", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
                 TextButton(onClick = settings, enabled = ready) { Text("设置") }
             }
-            fixtureLabel?.let { Text(it, color = colors.primary, style = MaterialTheme.typography.labelMedium) }
-            if (demo) Text("演示数据 · 非真实网络校时", color = colors.primary, style = MaterialTheme.typography.labelLarge)
-            Surface(shape = HomeDesign.card, color = colors.surfaceContainer) {
-                Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            Surface(shape = HomeDesign.card, color = colors.surfaceContainer, border = BorderStroke(1.dp, colors.outlineVariant)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(HomeDesign.gap)) {
-                    Surface(shape = RoundedCornerShape(50), color = if (warning) colors.errorContainer else colors.primaryContainer) {
-                        Text(status, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
-                            color = if (warning) colors.onErrorContainer else colors.onPrimaryContainer)
-                    }
+                    HomeClock(engine, state, preferences, running, active) { readFailed = true }
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = colors.outlineVariant)
+                    Text(if (running) homeSource(state) else "来源待校准", style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center, color = colors.onSurfaceVariant)
+                    Text("精度未验证", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
                     if (warning) {
-                        Surface(modifier = Modifier.fillMaxWidth(), shape = HomeDesign.control, color = colors.errorContainer) {
+                        Surface(modifier = Modifier.fillMaxWidth().testTag("home-warning"), shape = HomeDesign.control, color = colors.errorContainer) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(if (state.anchorUsable && !readFailed) "正在使用上次基准" else "当前没有可信时间", color = colors.onErrorContainer,
-                                    style = MaterialTheme.typography.labelLarge)
-                                Text("${if (readFailed) "时间推演不可用，等待新的校准" else state.failureReason ?: "当前来源未能完成校准"}。仅重试原来源，不自动切换。",
-                                    color = colors.onErrorContainer, style = MaterialTheme.typography.bodySmall)
+                                Text("$status · ${if (state.anchorUsable && !readFailed) "使用上次基准" else "无可信时间"}",
+                                    color = colors.onErrorContainer, style = MaterialTheme.typography.labelLarge)
+                                Text(if (readFailed) "推演不可用，等待新校准" else "仅重试原来源，不自动切换", color = colors.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall)
                             }
                         }
+                    } else if (status != "校准正常") {
+                        Surface(shape = RoundedCornerShape(8.dp), color = colors.primaryContainer) {
+                            Text(status, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium,
+                                color = colors.onPrimaryContainer)
+                        }
                     }
-                    Text("公共网络时钟", style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant)
-                    HomeClock(engine, state, preferences, running, active) { readFailed = true }
-                    HorizontalDivider(color = colors.outlineVariant)
-                    Text(if (running) homeSource(state) else "尚未校准", style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
-                    Text("精度未验证", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                    if (demo) Text("演示数据 · 非真实网络校时", color = colors.primary, style = MaterialTheme.typography.labelMedium)
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("手动偏移", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${if (offset >= 0) "+" else ""}$offset ms", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall,
-                        fontFamily = FontFamily.Monospace)
-                    TextButton(onClick = settings, enabled = ready) { Text("调整") }
+            if (offset == 0L) {
+                TextButton(onClick = settings, enabled = ready, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("home-offset-zero")) {
+                    Text("手动偏移", Modifier.weight(1f), textAlign = TextAlign.Start, color = colors.onSurfaceVariant)
+                    Text("0 ms  ›", fontFamily = FontFamily.Monospace)
                 }
-                Text("${platform.label()}预设 · 与悬浮首行一致", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                Text("手动偏移不代表平台官方时间", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            } else {
+                Column(Modifier.testTag("home-offset-active"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("手动偏移", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${if (offset >= 0) "+" else ""}$offset ms", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall,
+                            fontFamily = FontFamily.Monospace, color = colors.primary)
+                        TextButton(onClick = settings, enabled = ready) { Text("调整") }
+                    }
+                    Text("${platform.label()}预设 · 与悬浮首行一致", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    Text("手动偏移不代表平台官方时间", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
             }
             HorizontalDivider(color = colors.outlineVariant)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(if (running) "悬浮窗运行中" else "悬浮窗未运行", style = MaterialTheme.typography.titleMedium)
-                    Text(if (overlayGranted) "悬浮权限已授予" else "开启前需要悬浮窗权限", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                }
-                TextButton(onClick = { details = true }) { Text("详情") }
+                Text(if (overlayGranted) "悬浮权限已授予" else "开启前需要悬浮窗权限", Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                TextButton(onClick = { details = true }) { Text("来源详情") }
             }
             if (!notificationsGranted) {
                 Text("通知未允许，仍可从本页停止悬浮窗。", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                 TextButton(onClick = grantNotifications) { Text("管理通知权限") }
             }
-            if (!running && !requested) Text(if (message in listOf("未启动", "已停止")) "开启后获取网络时间；打开首页不会自动校时。" else message,
+            if (!running && !requested && message !in listOf("未启动", "已停止")) Text(message,
                 style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             if (running && message.startsWith("已请求")) Text(message, style = MaterialTheme.typography.bodyMedium, color = colors.primary)
             storageError?.let { Text(it, color = colors.error) }
-            Text("首页视觉预览版 · v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
     }
     if (details) AlertDialog(onDismissRequest = { details = false }, title = { Text("来源与校准") },
@@ -209,6 +220,7 @@ internal fun HomeScreen(
             Text("来源策略：${preferences.sourceChoice.label}")
             if (running) {
                 Text("来源标识：${state.sourceId ?: "正在选择"}")
+                state.failureReason?.let { Text(it) }
                 state.lastSuccess?.let { Text("最后成功基准 UTC：${Instant.ofEpochSecond(0, it.anchor.serverUtcEpochNanos)}") }
                 Text(when (state.sourceType) {
                     TimeSourceType.SYSTEM_NETWORK -> "系统提供的网络时间；缓存新鲜度和实测误差未知。重新校准仅重新读取系统结果。"
@@ -221,12 +233,21 @@ internal fun HomeScreen(
 }
 
 @Composable
-private fun ClockMark() {
-    val color = MaterialTheme.colorScheme.primary
-    Canvas(Modifier.size(32.dp)) {
-        drawCircle(color, radius = size.minDimension / 2 - 2.dp.toPx(), style = Stroke(2.dp.toPx()))
-        drawLine(color, center, Offset(center.x, size.height * .27f), 2.dp.toPx(), StrokeCap.Round)
-        drawLine(color, center, Offset(size.width * .70f, center.y), 2.dp.toPx(), StrokeCap.Round)
+private fun HomeNavIcon(index: Int) {
+    val color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(Modifier.size(22.dp)) {
+        val stroke = 1.7.dp.toPx()
+        when (index) {
+            0 -> {
+                drawCircle(color, radius = size.minDimension / 2 - stroke, style = Stroke(stroke))
+                drawLine(color, center, Offset(center.x, size.height * .25f), stroke, StrokeCap.Round)
+                drawLine(color, center, Offset(size.width * .72f, center.y), stroke, StrokeCap.Round)
+            }
+            1 -> for (x in listOf(.12f, .58f)) for (y in listOf(.12f, .58f))
+                drawRect(color, Offset(size.width * x, size.height * y), Size(size.width * .3f, size.height * .3f), style = Stroke(stroke))
+            else -> for ((x, top) in listOf(.2f to .55f, .5f to .2f, .8f to .38f))
+                drawLine(color, Offset(size.width * x, size.height * top), Offset(size.width * x, size.height * .85f), stroke, StrokeCap.Round)
+        }
     }
 }
 
@@ -258,8 +279,8 @@ private fun HomeClock(engine: TimeEngine, state: PlatformTimeState, preferences:
         }, Modifier.fillMaxWidth(), fontSize = size, lineHeight = 52.sp, fontWeight = FontWeight.Medium,
             fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
     }
-    Text(nanos?.let { date.format(Instant.ofEpochSecond(0, it)) } ?: "等待本次会话校准",
-        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(if (preferences.zoneId == "Asia/Shanghai") "北京时间 · Asia/Shanghai" else preferences.zoneId,
+    nanos?.let { Text(date.format(Instant.ofEpochSecond(0, it)),
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    Text(if (preferences.zoneId == "Asia/Shanghai") "北京时间 · UTC+08:00" else preferences.zoneId,
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

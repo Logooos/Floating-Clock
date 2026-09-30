@@ -243,3 +243,12 @@ HomeTheme 定义 A 方向深浅语义色、字号与形状；系统主题切换�
 本轮没有公共行迁移，也没有更改悬浮窗的极简显示。确认过的完整设计是后续方向，非本轮功能清单。
 API 35 仪器测试通过真实 TimeEngine 校准假源生成六种首页截图；PNG 经 MediaStore 存入模拟器
 Pictures/FloatingClock，CI 拉取并上传，测试应用卸载后仍可收集。正式 APK 不包含截图状态入口。
+
+
+### v0.6.0-home.2：首页视觉层级
+
+仅修改 HomeScreen 的展示与导航壳，保持 homeTime / HomeClock 读数逻辑及原服务回调。
+NavigationBar 复用 settings/diagnostics 回调进入旧页面，不添加路由框架或新页面。
+fixtureLabel 参数已从生产 UI 删除，测试来源记录在 MediaStore DESCRIPTION 与截图 README；
+六状态测试直接渲染生产布局。正常状态不使用胶囊，失效／重试只使用一个错误区域，详细原因在原来源弹窗。
+零／非零偏移分别用设置行／强调区展示，不改变偏移计算或持久化。

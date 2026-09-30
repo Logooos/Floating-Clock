@@ -2,6 +2,24 @@
 
 最后核对日期：2026-09-30。
 
+## v0.6.0-home.2 首页层级迭代
+
+基线 main：`619f64a58d2b6b5aec43d69b49374d80762d624b`；对应通过 CI 的代码为 `1ba7c3b`。
+保留全部 135 项既有测试，新增导航壳到原页面并返回、不启动服务的用例，总计 **136 项独立测试**：
+core 72、app 34、仪器 30；API 31 因通知权限用例不适用，预期执行 29 项。
+扩展原截图测试，断言正常态无大状态标签、失效仅有一个异常区域、零偏移压缩行与导航可见；
+扩展原虚拟时钟测试，验证非零偏移强调区与零偏移行互斥，保持时间推进与停止清空断言。
+
+六张 API 35 图继续由真实 Compose 和 TimeEngine 配合固定假源生成。
+fixture 提示不进入生产首页参数或布局；测试身份在 MediaStore DESCRIPTION 与产物 README 中记录。
+截图不证明实际网络时间准确度；真实演示模式仍明确标识。旧设置、诊断、校时、悬浮服务与存储不改。
+
+本地命令：`./gradlew testDebugUnitTest lintDebug assembleDebug connectedDebugAndroidTest --continue --max-workers=2 --console=plain --no-daemon`。
+使用已有隔离 WSL 工具链与 API 35 Pixel 2 模拟器；本轮 API 31/33 本地 NOT RUN，由 CI 矩阵执行。
+本地返回 BUILD SUCCESSFUL（6m26s，102 个任务，34 执行）；core 72、app 34、API 35 仪器 30 项全部通过，
+失败／错误／跳过均 0。lint 与 APK 构建通过；六张 PNG 逐张检查完成，受测源码 SHA-256 快照一致。
+远端 CI 结果及受测提交待下方记录。真机视觉、TalkBack、200% 字体完整页面、120FPS 与实测精度：NOT RUN。
+
 ## v0.6.0-home.1 首页视觉预览
 
 本轮仅实现 A「静谧卡片」首页。基线代码为 `a9ac7b9a70f01164f250221919ad08c82a84ea3c`，

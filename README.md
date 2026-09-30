@@ -1,7 +1,7 @@
 # Floating Clock
 
 免费开源的 Android 悬浮时钟项目，产品基线见 [PRD.md](PRD.md)。
-当前开发预览版 **v0.6.0-home.1**（versionCode 6），支持 Android 12（API 31）及以上。
+当前开发预览版 **v0.6.0-home.2**（versionCode 7），支持 Android 12（API 31）及以上。
 
 复用纯 Kotlin 时间引擎与 WindowManager 悬浮容器，默认使用真实网络时间：
 Android 13+ 优先系统网络时钟；Android 12 或首次不可用时尝试 Cloudflare / Google NTP。
@@ -46,7 +46,7 @@ Proto DataStore 保存配置，Room 保存最近 7 天诊断（最多 120,000 �
 3. `build` 安装 JDK 17 与 SDK 36，执行单元测试、lint 和 Debug APK 构建。
 4. 成功后下载 `floating-clock-debug` 产物，解压得到 APK。
 5. `overlay-smoke` 在 API 31、33、35 模拟器上检查首页、权限、窗口、手势和锁屏生命周期。
-6. API 35 额外上传 `home-api35-screenshots`：浅／深色 × 停止／正常／失效六张实际渲染截图，使用明确标注的模拟校准。
+6. API 35 额外上传 `home-api35-screenshots`：浅／深色 × 停止／正常／失效六张实际渲染截图，使用模拟校准，测试标识记录在产物 README 和 MediaStore 元数据，不进入首页布局。
 
 工作流文件存在不代表构建通过；当前验证记录见 [docs/testing.md](docs/testing.md)。
 Debug APK 仅供开发测试，使用 runner 临时调试签名，不保证不同运行产物可直接覆盖安装。
