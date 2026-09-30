@@ -24,6 +24,8 @@ internal enum class ClockFont(val label: String) { MONOSPACE("等宽"), SANS("�
 
 internal data class UserPreferences(
     val overlay: OverlayConfig = OverlayConfig(),
+    val clockRows: List<ClockRow> = listOf(ClockRow.PUBLIC),
+    val presetMigrationAcknowledged: Boolean = true,
     val globalOffsetMillis: Long = 0,
     val platformOffsetsMillis: Map<PlatformId, Long> = PlatformId.entries.associateWith { 0L },
     val zoneId: String = "Asia/Shanghai",
@@ -45,7 +47,10 @@ internal data class UserPreferences(
         backgroundColorArgb = if (value == VisualStyle.LIGHT) 0xfff4f6fa.toInt() else 0xff191d23.toInt(),
         backgroundOpacity = when (value) { VisualStyle.GLASS -> 0.65f; VisualStyle.DIGITS -> 0f; else -> 1f })
 
+    fun usePublicClock() = copy(clockRows = listOf(ClockRow.PUBLIC), presetMigrationAcknowledged = true)
+
     fun normalized(): UserPreferences = copy(
+        clockRows = clockRows.distinct().take(3).ifEmpty { listOf(ClockRow.PUBLIC) },
         globalOffsetMillis = globalOffsetMillis.coerceIn(-MAX_OFFSET_MILLIS, MAX_OFFSET_MILLIS),
         platformOffsetsMillis = PlatformId.entries.associateWith { (platformOffsetsMillis[it] ?: 0).coerceIn(-MAX_OFFSET_MILLIS, MAX_OFFSET_MILLIS) },
         zoneId = runCatching { ZoneId.of(zoneId).id }.getOrDefault("Asia/Shanghai"),
@@ -60,7 +65,8 @@ internal data class UserPreferences(
         positionYRatio = positionYRatio.finiteOr(0.2f).coerceIn(0f, 1f),
     )
 
-    fun toProto(): UserSettings = UserSettings.newBuilder().setSchemaVersion(1)
+    fun toProto(): UserSettings = UserSettings.newBuilder().setSchemaVersion(2)
+        .addAllClockRows(clockRows.map { it.name }).setPresetMigrationAcknowledged(presetMigrationAcknowledged)
         .addAllSelectedPlatformIds(overlay.platforms.map { it.name }).setDisplayMode(overlay.mode.name)
         .setGlobalOffsetMillis(globalOffsetMillis).putAllPlatformOffsetMillis(platformOffsetsMillis.mapKeys { it.key.name })
         .setZoneId(zoneId).setSourceChoice(sourceChoice.name).setManualSource(manualSource.name).setHttpUrl(httpUrl)
@@ -75,6 +81,9 @@ internal data class UserPreferences(
             val platforms = value.selectedPlatformIdsList.mapNotNull { enumOrNull<PlatformId>(it) }.distinct().take(3).ifEmpty { defaults.overlay.platforms }
             return UserPreferences(
                 overlay = OverlayConfig(platforms, enumOrNull<DisplayMode>(value.displayMode) ?: DisplayMode.FULL),
+                clockRows = if (value.schemaVersion < 2) platforms.map(ClockRow::forPreset)
+                    else value.clockRowsList.mapNotNull { enumOrNull<ClockRow>(it) },
+                presetMigrationAcknowledged = value.schemaVersion >= 2 && value.presetMigrationAcknowledged,
                 globalOffsetMillis = value.globalOffsetMillis,
                 platformOffsetsMillis = PlatformId.entries.associateWith { value.platformOffsetMillisMap[it.name] ?: 0L },
                 zoneId = value.zoneId,

@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import io.github.floatingclock.time.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 
 class MainActivity : ComponentActivity() {
     private val clock = ClockProvider(SystemClock::elapsedRealtimeNanos)
@@ -42,7 +43,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             var page by rememberSaveable { mutableStateOf("home") }
             BackHandler(page != "home") { page = "home" }
-            if (page == "home") HomeTheme {
+            val pages = rememberSaveableStateHolder()
+            HomeTheme { pages.SaveableStateProvider(page) {
+            if (page == "home") {
                 HomeScreen(engine, OverlayState.timeState, OverlayState.preferences,
                     OverlayState.running, OverlayState.requested, active, AppStorage.ready,
                     overlayGranted, notificationsGranted, OverlayState.message, AppStorage.error,
@@ -51,19 +54,11 @@ class MainActivity : ComponentActivity() {
                         if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
                     },
-                    sync = { OverlayState.onSyncNow?.invoke() }, settings = { page = "settings" }, diagnostics = { page = "diagnostics" })
-            } else MaterialTheme {
-                Scaffold { insets ->
-                    Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(24.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
-                        Text(stringResource(R.string.development_version, BuildConfig.VERSION_NAME))
-                        AppStorage.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        TextButton(onClick = { page = "home" }) { Text("返回首页") }
-                        if (page == "settings") SettingsPage() else DiagnosticsPage()
-                    }
-                }
+                    sync = { OverlayState.onSyncNow?.invoke() }, settings = { page = "settings" }, diagnostics = { page = "diagnostics" }, appearance = { page = "appearance" })
+            } else {
+                SecondaryPage(page, engine, active) { page = it }
             }
+            } }
         }
     }
 
@@ -108,67 +103,68 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 internal fun SourceControls() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val saved by AppStorage.preferences.collectAsState()
     var expanded by remember { mutableStateOf(false) }
-    var httpEditing by remember { mutableStateOf(false) }
-    var url by remember(OverlayState.httpUrl) { mutableStateOf(OverlayState.httpUrl) }
+    var httpEditing by rememberSaveable { mutableStateOf(false) }
+    var url by rememberSaveable(saved.httpUrl) { mutableStateOf(saved.httpUrl) }
+    var pending by remember { mutableStateOf<SourceChoice?>(null) }
+    var stopping by remember { mutableStateOf(false) }
     val stopped = !OverlayState.running && !OverlayState.requested
-    Text("实际时间来源（所有显示平台共用）")
+    fun save(choice: SourceChoice) { AppStorage.update { it.chooseSource(choice).copy(httpUrl = if (choice == SourceChoice.HTTP) url else it.httpUrl) } }
+    fun choose(choice: SourceChoice) { if (stopped) save(choice) else pending = choice }
+    LaunchedEffect(stopped, stopping, pending) {
+        if (stopped && stopping) { pending?.let(::save); pending = null; stopping = false }
+    }
+    Text("来源策略（所有显示行共用）")
     Box {
-        OutlinedButton(onClick = { expanded = true }, enabled = stopped) { Text(OverlayState.sourceChoice.label) }
+        OutlinedButton(onClick = { expanded = true }, enabled = !stopping) { Text(saved.sourceChoice.label) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SourceChoice.entries.forEach { choice ->
                 DropdownMenuItem(text = { Text(choice.label) }, enabled = choice != SourceChoice.SYSTEM || Build.VERSION.SDK_INT >= 33,
-                    onClick = {
-                        if (choice == SourceChoice.HTTP) httpEditing = true
-                        else { AppStorage.update { it.chooseSource(choice) }; httpEditing = false }
-                        expanded = false
-                    })
+                    onClick = { if (choice == SourceChoice.HTTP) httpEditing = true else { choose(choice); httpEditing = false }; expanded = false })
             }
         }
     }
-    if (OverlayState.sourceChoice == SourceChoice.AUTO) {
-        val saved by AppStorage.preferences.collectAsState()
-        TextButton(enabled = stopped && (saved.manualSource != SourceChoice.HTTP || validHttpsUrl(saved.httpUrl) != null) &&
-            (saved.manualSource != SourceChoice.SYSTEM || Build.VERSION.SDK_INT >= 33),
-            onClick = { AppStorage.update { it.chooseSource(it.manualSource) } }) { Text("恢复上次手动来源：${saved.manualSource.label}") }
+    Text(if (Build.VERSION.SDK_INT >= 33) "自动初选：系统网络时间 → Cloudflare → Google" else "自动初选：NTP Cloudflare → Google")
+    Text("Google 使用闰秒平滑。演示仅供测试，不是真实网络校时。", style = MaterialTheme.typography.bodySmall)
+    Text("实际来源：${if (OverlayState.running) homeSource(OverlayState.timeState) else "尚未选择"}")
+    if (saved.sourceChoice == SourceChoice.AUTO) {
+        TextButton(enabled = !stopping && (saved.manualSource != SourceChoice.HTTP || validHttpsUrl(saved.httpUrl) != null) &&
+            (saved.manualSource != SourceChoice.SYSTEM || Build.VERSION.SDK_INT >= 33), onClick = { choose(saved.manualSource) }) {
+            Text("恢复上次手动来源：${saved.manualSource.label}")
+        }
     }
-    if (httpEditing || OverlayState.sourceChoice == SourceChoice.HTTP) {
-        OutlinedTextField(value = url, onValueChange = { url = it.trim() }, enabled = stopped,
-            label = { Text("公开 HTTPS URL（无密钥、无查询参数）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        Text("仅估算 Date 秒级时间；缓存或无法确认新鲜度的响应会被拒绝。")
-        TextButton(enabled = stopped && validHttpsUrl(url) != null, onClick = {
-            AppStorage.update { it.chooseSource(SourceChoice.HTTP).copy(httpUrl = url) }; httpEditing = false
-        }) { Text("保存并使用 HTTPS 来源") }
+    if (httpEditing || saved.sourceChoice == SourceChoice.HTTP) {
+        OutlinedTextField(value = url, onValueChange = { url = it.trim() }, label = { Text("公开 HTTPS URL（无密钥、无查询参数）") },
+            singleLine = true, isError = url.isNotEmpty() && validHttpsUrl(url) == null, modifier = Modifier.fillMaxWidth())
+        Text("HTTP Date 为秒级估算；毫秒位是本地推演，不代表 50ms 精度。缓存或无法确认新鲜度的响应会被拒绝。")
+        TextButton(enabled = !stopping && validHttpsUrl(url) != null, onClick = { choose(SourceChoice.HTTP) }) { Text("保存 HTTPS 来源") }
     }
-    Text("初次自动选源可兜底；运行中失败只重试原来源。更换来源需先停止。")
-    Text(OverlayState.syncDetails)
-    OutlinedButton(onClick = { OverlayState.onSyncNow?.invoke() }, enabled = OverlayState.running) { Text("立即同步（最短 30 秒）") }
+    Text("只有初次自动选源可兜底；运行中失败只重试原来源。切源须停止当前会话，保存后不会自动重启。")
+    if (stopping) Text("正在停止会话，资源释放后保存来源…")
+    if (pending != null && !stopping) AlertDialog(onDismissRequest = { pending = null }, title = { Text("停止会话并保存来源？") },
+        text = { Text("悬浮窗和校时将停止。保存后需手动重新开启，不沿用旧锚点。") },
+        confirmButton = { TextButton(onClick = {
+            OverlayState.requested = false
+            context.stopService(Intent(context, OverlayService::class.java))
+            stopping = true
+        }) { Text("停止并保存") } }, dismissButton = { TextButton(onClick = { pending = null }) { Text("取消") } })
 }
 
 @Composable
-internal fun PlatformControls() {
-    val config = OverlayState.config
-    Text("悬浮平台（1–3 个，按下方顺序显示）")
-    PlatformId.entries.forEach { platform ->
-        Row {
-            val selected = platform in config.platforms
-            Checkbox(checked = selected, modifier = Modifier.semantics { contentDescription = platform.label() },
-                enabled = if (selected) config.platforms.size > 1 else config.platforms.size < 3,
-                onCheckedChange = { AppStorage.configure { it.toggle(platform) } })
-            Text(platform.label(), modifier = Modifier.padding(top = 12.dp))
-        }
-    }
-    config.platforms.forEachIndexed { index, platform ->
-        Row {
-            Text("${index + 1}. ${platform.label()}", Modifier.weight(1f).padding(top = 12.dp))
-            TextButton(onClick = { AppStorage.configure { it.move(platform, -1) } }, enabled = index > 0) { Text("上移") }
-            TextButton(onClick = { AppStorage.configure { it.move(platform, 1) } }, enabled = index < config.platforms.lastIndex) { Text("下移") }
-        }
-    }
-    Row {
-        DisplayMode.entries.forEach { mode ->
-            TextButton(onClick = { AppStorage.configure { it.copy(mode = mode) } }, enabled = config.mode != mode) {
-                Text(when (mode) { DisplayMode.FULL -> "完整"; DisplayMode.COMPACT -> "紧凑"; DisplayMode.MINIMAL -> "极简" })
+internal fun SecondaryPage(page: String, engine: TimeEngine, active: Boolean, navigate: (String) -> Unit) {
+    Scaffold(bottomBar = { ClockNavigation(if (page == "appearance") 1 else if (page == "diagnostics") 2 else 0) {
+        navigate(listOf("home", "appearance", "diagnostics")[it])
+    } }) { insets ->
+        Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(HomeDesign.gutter),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppStorage.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (page == "settings") TextButton(onClick = { navigate("home") }) { Text("返回首页") }
+            when (page) {
+                "appearance" -> AppearancePage(engine, active)
+                "settings" -> SettingsPage()
+                else -> DiagnosticsPage()
             }
         }
     }

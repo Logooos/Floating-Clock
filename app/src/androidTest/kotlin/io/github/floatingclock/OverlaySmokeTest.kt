@@ -172,8 +172,8 @@ class OverlaySmokeTest {
             event.recycle()
         }
         await { windows().single().menuOpen }
-        menuClick("京东")
-        await { io.github.floatingclock.time.PlatformId.JD in OverlayState.config.platforms }
+        menuClick("京东 · 手动预设")
+        await { ClockRow.JD in OverlayState.preferences.clockRows }
         menuClick("关闭菜单")
         await { !windows().single().menuOpen }
         val downTime = SystemClock.uptimeMillis()

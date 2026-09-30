@@ -2,6 +2,39 @@
 
 最后核对日期：2026-09-30。
 
+## v0.6.0 完整 UI 重构
+
+基线 main：`032aed64495458c7b35a1a068de12fefc991b49c`；上一轮受测代码为 `8ec1048`。
+保留全部 136 项既有测试，新增 13 项，总计 **149 项独立用例**：core 72、app 43、仪器 34。
+API 31 的通知权限拒绝用例不适用，预期执行 33 项；模拟器矩阵不重复计数。
+新增覆盖新安装默认公共行、旧配置逐字段与零偏移迁移、公共行同一快照去除预设偏移、
+原子合并外观草稿、五行保守分组／冲突／分页边界、正式导航与草稿保留、迁移说明主动选择、
+各主要页面深浅主题及 200% 字体。保留权限、手势、锁屏、导出、Room 迁移及确定性网络测试。
+
+最终本地执行：
+
+```sh
+wsl -d Ubuntu-22.04 --exec sh .tools/gradle-linux.sh testDebugUnitTest lintDebug assembleDebug connectedDebugAndroidTest --max-workers=2
+```
+
+工具脚本不提交，只配置已有隔离 JDK 17／SDK 36 后调用仓库 Wrapper；实际 Gradle 任务与验收命令一致。
+结果 BUILD SUCCESSFUL（4m10s）：core 72、app 43、API 35 仪器 34，failures/errors/skipped 均 0；lint 与 assemble 通过。
+API 35 使用干净 Pixel 2 AVD，十二张正式布局 PNG 已生成，主要页面与失效状态图已人工检查。
+首轮曾因手动删除 PNG 后遗留 MediaStore 索引导致两项截图保存失败；重建干净 AVD 后重跑通过。
+lint 曾发现组合中直接读取 StateFlow.value，已改 collectAsState 并缓存日期格式器；上述最终四项检查包含修复。
+这些失败轮次不计作通过。
+
+本地 API 31／33：**NOT RUN**，由远端同代码提交的 CI 矩阵验证；提交前云端结果尚未验证。
+CI 保留 API 31／33／35，截图产物为 `ui-api35-screenshots`：首页六状态图，加外观／高级设置／诊断各两主题，共十二张。
+Debug APK 为 `floating-clock-debug`；截图身份在产物 README 和 MediaStore 元数据中说明，不进入正式首页。
+截图使用假源与真实引擎，不访问公共网络、不证明 50ms 或 120FPS。
+
+版本为 v0.6.0 / versionCode 8（在 home.2 的 7 上递增）。Proto 仅追加 18／19；Room schema 与历史导出数据契约不变。
+未知 RTT／不确定度／误差仍可空，诊断分组数不是网络请求数。无正式 Release、签名密钥或破坏性迁移。
+真机视觉、HyperOS 跨 App 悬浮、TalkBack、全部尺寸／字体组合、真实覆盖升级、120FPS 与可信参考精度：**NOT RUN**。
+CI Debug 签名由各 runner 临时产生，未保证不同工作流 APK 签名一致；不要为试装直接卸载有重要数据的旧版。
+模型级迁移测试通过不等于已验证真实签名 APK 从 v0.5.0 覆盖升级；该设备测试保持待验收。
+
 ## v0.6.0-home.2 首页层级迭代
 
 基线 main：`619f64a58d2b6b5aec43d69b49374d80762d624b`；对应通过 CI 的代码为 `1ba7c3b`。

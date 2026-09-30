@@ -21,4 +21,7 @@ message UserSettings {
   optional float position_y_ratio = 15;
   uint32 schema_version = 16;
   string manual_source = 17;
+  // Display rows are PUBLIC or an existing PlatformId; legacy IDs remain untouched.
+  repeated string clock_rows = 18;
+  bool preset_migration_acknowledged = 19;
 }

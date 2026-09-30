@@ -252,3 +252,23 @@ NavigationBar 复用 settings/diagnostics 回调进入旧页面，不添加路�
 fixtureLabel 参数已从生产 UI 删除，测试来源记录在 MediaStore DESCRIPTION 与截图 README；
 六状态测试直接渲染生产布局。正常状态不使用胶囊，失效／重试只使用一个错误区域，详细原因在原来源弹窗。
 零／非零偏移分别用设置行／强调区展示，不改变偏移计算或持久化。
+
+
+## v0.6.0 UI 重构
+
+App 层 `ClockRow` 显式区分 PUBLIC 与现有五个 PlatformId。Proto 追加字段 18（显示行）与 19
+（已确认迁移说明），schema_version 提升为 2；1–17 不改编号或含义。新文件使用 serializer
+默认公共行；旧文件缺少新字段时按旧选择顺序迁移，即使偏移全为零也不视作新安装。
+原 selected_platform_ids 与所有偏移继续保留。主动选择公共单行不删除旧数据。
+
+首页复用既有锚点只读 API。多行悬浮仍一次 readInto 获取一致快照；新增只读
+shownUtcEpochNanosWithoutPreset 从同一个快照去除预设偏移，保留全局偏移，不读取时钟、
+不更改锚点或配置。校准算法、网络协议、同步调度及服务生命周期不变。
+
+三个主页面共用 HomeTheme 与 NavigationBar；SaveableStateHolder 隔离滚动与页面状态。
+外观草稿仅保存偏好值；应用以 DataStore 原子事务合并外观字段，保留同时发生的来源与偏移修改。
+预览示例状态仅属于 UI，不能写入校准状态或诊断库。
+
+measurementGroups 只匹配当前查询页中按 ID 降序连续的五条完整旧样本：除 ID/platformId 外
+所有保存字段相同，平台顺序与旧写入顺序一致。缺行、不同指标、不同事件、重复平台或 ID 间隙
+均保守单列；筛选与分页不跨界补组。组数不是请求数。Room schema 与原始导出契约不变。

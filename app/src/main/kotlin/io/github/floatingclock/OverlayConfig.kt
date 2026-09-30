@@ -2,6 +2,17 @@ package io.github.floatingclock
 
 import io.github.floatingclock.time.PlatformId
 
+/** App display identity only: PUBLIC is not an alias for a shopping preset. */
+internal enum class ClockRow(val preset: PlatformId?) {
+    PUBLIC(null), TAOBAO_TMALL(PlatformId.TAOBAO_TMALL), JD(PlatformId.JD),
+    MEITUAN(PlatformId.MEITUAN), PDD(PlatformId.PDD), DOUYIN(PlatformId.DOUYIN);
+
+    fun label(): String = preset?.let { "${it.label()} · 手动预设" } ?: "公共时钟"
+    companion object {
+        fun forPreset(platform: PlatformId): ClockRow = entries.first { it.preset == platform }
+    }
+}
+
 internal enum class DisplayMode { FULL, COMPACT, MINIMAL }
 
 /** In-memory configuration; ordering and selection share one source of truth. */

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertIsSelected
+import org.junit.Assert.*
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertTextEquals
@@ -40,17 +41,43 @@ class LaunchSmokeTest {
             .performScrollTo().assertIsDisplayed().assertIsEnabled()
     }
 
-    @Test fun homeNavigationShellReusesExistingPagesAndReturnsWithoutStartingService() {
+    @Test fun navigationRetainsIndependentPagesWithoutStartingService() {
         compose.onNodeWithTag("home-nav-0").assertIsSelected()
         compose.onNodeWithTag("home-nav-1").performClick()
-        compose.onNodeWithText("视觉与时间设置").assertIsDisplayed()
-        compose.onNodeWithText("返回首页").performClick()
+        compose.onNodeWithText("实时外观预览").assertIsDisplayed()
+        compose.onNodeWithTag("home-nav-1").assertIsSelected()
+        compose.onNodeWithTag("home-nav-0").performClick()
         compose.onNodeWithTag("home-nav-2").performClick()
         compose.onNodeWithText("校时诊断").assertIsDisplayed()
-        compose.onNodeWithText("返回首页").performClick()
+        compose.onNodeWithTag("home-nav-0").performClick()
         compose.onNodeWithTag("home-nav-0").assertIsSelected()
         org.junit.Assert.assertFalse(OverlayState.running)
         org.junit.Assert.assertFalse(OverlayState.requested)
+    }
+
+    @Test fun appearanceDraftSurvivesNavigationAndAppliesOnce() {
+        compose.onNodeWithTag("home-nav-1").performClick()
+        compose.onNodeWithText("浅色卡片").performScrollTo().performClick()
+        assertEquals(VisualStyle.DARK, AppStorage.preferences.value.style)
+        compose.onNodeWithTag("home-nav-2").performClick()
+        compose.onNodeWithTag("home-nav-1").performClick()
+        compose.onNodeWithText("浅色卡片").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("应用外观").performScrollTo().performClick()
+        compose.waitUntil(10_000) { AppStorage.preferences.value.style == VisualStyle.LIGHT }
+        assertFalse(OverlayState.running)
+    }
+
+    @Test fun migrationNoticeOnlyChangesDisplayAfterExplicitChoice() {
+        kotlinx.coroutines.runBlocking { AppStorage.settings.update { it.copy(
+            clockRows = listOf(ClockRow.JD), presetMigrationAcknowledged = false,
+            platformOffsetsMillis = it.platformOffsetsMillis + (io.github.floatingclock.time.PlatformId.JD to -25L)) } }
+        compose.waitUntil(10_000) { !OverlayState.preferences.presetMigrationAcknowledged }
+        compose.onNodeWithText("改用公共单行（保留偏移）").performScrollTo().performClick()
+        compose.waitUntil(10_000) { OverlayState.preferences.presetMigrationAcknowledged }
+        assertEquals(listOf(ClockRow.PUBLIC), AppStorage.preferences.value.clockRows)
+        assertEquals(-25L, AppStorage.preferences.value.platformOffsetsMillis[io.github.floatingclock.time.PlatformId.JD])
+        assertFalse(OverlayState.running)
+        assertFalse(OverlayState.requested)
     }
 
     @Test fun injectedMonotonicClockChangesDisplayedTime() {

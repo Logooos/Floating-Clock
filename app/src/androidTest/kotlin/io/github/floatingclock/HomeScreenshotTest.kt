@@ -58,6 +58,38 @@ class HomeScreenshotTest {
         }
     }
 
+    @Test fun majorPagesRenderBothThemesAndExportScreenshots() {
+        compose.waitUntil(10_000) { AppStorage.ready }
+        runBlocking { AppStorage.settings.update { UserPreferences(sourceChoice = SourceChoice.DEMO) } }
+        val engine = TimeEngine(ClockProvider { 0 })
+        for (dark in listOf(false, true)) for (page in listOf("appearance", "settings", "diagnostics")) {
+            compose.runOnUiThread { compose.activity.setContent {
+                HomeTheme(dark) { SecondaryPage(page, engine, false) {} }
+            } }
+            compose.waitForIdle()
+            compose.onNodeWithText(when (page) { "appearance" -> "实时外观预览"; "settings" -> "高级设置"; else -> "校时诊断" }).assertIsDisplayed()
+            compose.onNodeWithTag("home-nav-${if (page == "appearance") 1 else if (page == "diagnostics") 2 else 0}").assertIsSelected()
+            if (Build.VERSION.SDK_INT == 35) saveImage("$page-${if (dark) "dark" else "light"}.png")
+        }
+    }
+
+    @Test fun secondaryPagesRemainNavigableAtDoubleFontScale() {
+        compose.waitUntil(10_000) { AppStorage.ready }
+        val engine = TimeEngine(ClockProvider { 0 })
+        for (dark in listOf(false, true)) for (page in listOf("appearance", "settings", "diagnostics")) {
+            compose.runOnUiThread { compose.activity.setContent {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides
+                    androidx.compose.ui.unit.Density(density.density, 2f)) {
+                    HomeTheme(dark) { SecondaryPage(page, engine, false) {} }
+                }
+            } }
+            compose.onNodeWithTag("home-nav-0").assertIsDisplayed()
+            compose.onNodeWithText(when (page) { "appearance" -> "应用外观"; "settings" -> "关于与隐私"; else -> "测量分组" })
+                .performScrollTo().assertIsDisplayed()
+        }
+    }
+
     @Test fun homeClockAdvancesFromSnapshotWithoutSamplingAndClearsOnStop() {
         compose.mainClock.autoAdvance = false
         var now = 0L

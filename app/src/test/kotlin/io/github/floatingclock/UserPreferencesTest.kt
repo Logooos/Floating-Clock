@@ -13,7 +13,36 @@ class UserPreferencesTest {
     @get:Rule val temporary = TemporaryFolder()
 
     @Test fun emptyProtoUsesSafeDefaults() {
-        assertEquals(UserPreferences(), UserPreferences.fromProto(UserSettings.getDefaultInstance()))
+        assertEquals(UserPreferences().copy(clockRows = listOf(ClockRow.TAOBAO_TMALL),
+            presetMigrationAcknowledged = false), UserPreferences.fromProto(UserSettings.getDefaultInstance()))
+    }
+
+    @Test fun legacyMigrationPreservesEveryPreferenceAndIsIdempotent() {
+        val original = UserPreferences(overlay = OverlayConfig(listOf(PlatformId.JD, PlatformId.PDD)),
+            globalOffsetMillis = -35, platformOffsetsMillis = PlatformId.entries.associateWith { it.ordinal * -17L },
+            zoneId = "America/New_York", sourceChoice = SourceChoice.NTP_BACKUP,
+            manualSource = SourceChoice.NTP_BACKUP, font = ClockFont.SERIF,
+            fontSizeSp = 42f, positionXRatio = .8f).preset(VisualStyle.GLASS)
+        val legacy = original.toProto().toBuilder().setSchemaVersion(1).clearClockRows()
+            .clearPresetMigrationAcknowledged().build()
+        val migrated = UserPreferences.fromProto(legacy)
+        assertEquals(original.copy(clockRows = listOf(ClockRow.JD, ClockRow.PDD),
+            presetMigrationAcknowledged = false), migrated)
+        assertEquals(migrated, UserPreferences.fromProto(migrated.toProto()))
+        val public = migrated.usePublicClock()
+        assertEquals(migrated.platformOffsetsMillis, public.platformOffsetsMillis)
+        assertEquals(migrated.overlay, public.overlay)
+        assertTrue(UserPreferences.fromProto(public.toProto()).presetMigrationAcknowledged)
+        assertEquals(listOf(ClockRow.PUBLIC), public.clockRows)
+    }
+
+    @Test fun publicRowCountsTowardThreeAndHasNoPlatformAlias() {
+        assertNull(ClockRow.PUBLIC.preset)
+        val normalized = UserPreferences(clockRows = listOf(ClockRow.PUBLIC, ClockRow.JD,
+            ClockRow.PUBLIC, ClockRow.PDD, ClockRow.DOUYIN)).normalized()
+        assertEquals(listOf(ClockRow.PUBLIC, ClockRow.JD, ClockRow.PDD), normalized.clockRows)
+        assertEquals(listOf(ClockRow.PUBLIC), normalized.copy(clockRows = emptyList()).normalized().clockRows)
+        assertTrue(ClockRow.JD.label().contains("手动预设"))
     }
 
     @Test fun platformOrderIsDeduplicatedBoundedAndCombined() {

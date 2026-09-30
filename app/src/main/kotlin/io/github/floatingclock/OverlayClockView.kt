@@ -42,12 +42,12 @@ internal class OverlayClockView(
     private val rowHeight get() = (fontHeight - 27).coerceAtLeast(0) + when (OverlayState.config.mode) {
         DisplayMode.FULL -> 100
         DisplayMode.COMPACT -> 66
-        DisplayMode.MINIMAL -> 42
+        DisplayMode.MINIMAL -> 58
     }
     private val contentWidth get() = dp(maxOf(320, (fontHeight * 8.2f).toInt() + 24))
     internal val desiredWidth get() = contentWidth.coerceAtMost(resources.displayMetrics.widthPixels)
     internal val desiredHeight get() = if (menuOpen) dp(520).coerceAtMost((resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(dp(120)))
-        else dp(36 + rowHeight * OverlayState.config.platforms.size).coerceAtMost((resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(dp(80)))
+        else dp(36 + rowHeight * OverlayState.preferences.clockRows.size).coerceAtMost((resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(dp(80)))
     private val gestures = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: android.view.MotionEvent) = true
         override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
@@ -65,7 +65,7 @@ internal class OverlayClockView(
         applyAppearance()
         isClickable = true
         isFocusable = true
-        contentDescription = "悬浮时钟，精度未验证。点击选择平台，长按拖动"
+        contentDescription = "悬浮时钟，精度未验证。点击选择手动预设，长按拖动"
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -113,25 +113,26 @@ internal class OverlayClockView(
         canvas.drawRect(0f, 0f, width.toFloat(), dp(34).toFloat(), paint)
         paint.color = Color.rgb(255, 205, 100)
         paint.textSize = dp(13).toFloat()
-        val status = if (valid) readings.state(OverlayState.config.platforms.first()).statusLabel() else "无可信时间 · 精度未验证"
-        canvas.drawText(if (OverlayState.sourceChoice == SourceChoice.DEMO) "演示 · $status" else status,
+        val status = if (valid) readings.state(PlatformId.TAOBAO_TMALL).statusLabel() else "无可信时间 · 精度未验证"
+        canvas.drawText(if (OverlayState.sourceChoice == SourceChoice.DEMO) "演示 · $status" else "${shortSource(OverlayState.timeState)} · $status",
             dp(12).toFloat(), dp(24).toFloat(), paint)
         val config = OverlayState.config
         val scale = minOf(1f, width.toFloat() / contentWidth,
-            (height - dp(36)).coerceAtLeast(0).toFloat() / dp(rowHeight * config.platforms.size))
+            (height - dp(36)).coerceAtLeast(0).toFloat() / dp(rowHeight * OverlayState.preferences.clockRows.size))
         canvas.save()
         canvas.translate(0f, dp(36).toFloat())
         canvas.scale(scale, scale)
         paint.setShadowLayer(dp(2).toFloat(), 0f, 0f, if (Color.luminance(OverlayState.preferences.textColorArgb) > 0.5f) Color.BLACK else Color.WHITE)
-        config.platforms.forEachIndexed { index, platform ->
+        OverlayState.preferences.clockRows.forEachIndexed { index, row ->
+            val platform = row.preset ?: PlatformId.TAOBAO_TMALL
             var y = dp(index * rowHeight)
-            if (config.mode != DisplayMode.MINIMAL) {
+            run {
                 paint.color = OverlayState.preferences.textColorArgb; paint.textSize = dp(14).toFloat()
-                canvas.drawText(platform.label(), dp(12).toFloat(), (y + dp(16)).toFloat(), paint)
-                y += dp(22)
+                canvas.drawText(row.label(), dp(12).toFloat(), (y + dp(16)).toFloat(), paint)
+                y += dp(if (config.mode == DisplayMode.MINIMAL) 18 else 22)
             }
             paint.color = OverlayState.preferences.textColorArgb; paint.textSize = dp(fontHeight).toFloat()
-            val text = if (valid && readings.hasTime(platform)) formatter.format(readings.shownUtcEpochNanos(platform)) else "无可信时间"
+            val text = if (valid && readings.hasTime(platform)) formatter.format(if (row.preset == null) readings.shownUtcEpochNanosWithoutPreset(platform) else readings.shownUtcEpochNanos(platform)) else "无可信时间"
             canvas.drawText(text, dp(12).toFloat(), (y + dp(fontHeight + 1)).toFloat(), paint)
             if (config.mode == DisplayMode.FULL) {
                 paint.color = OverlayState.preferences.textColorArgb; paint.textSize = dp(12).toFloat()
@@ -205,30 +206,37 @@ internal class OverlayClockView(
     private fun buildMenu() {
         val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0); setBackgroundColor(Color.rgb(25, 29, 35)) }
         column.addView(TextView(context).apply {
-            text = "平台选择（1–3 个）\n${OverlayState.syncDetails}"
+            text = "手动预设（最多三行，含公共时钟）\n${OverlayState.syncDetails}"
             setTextColor(Color.WHITE)
         })
         column.addView(Button(context).apply {
             text = "立即同步（受限频保护）"
             setOnClickListener { OverlayState.onSyncNow?.invoke() }
         })
-        val config = OverlayState.config
-        PlatformId.entries.forEach { platform ->
+        val rows = OverlayState.preferences.clockRows
+        ClockRow.entries.forEach { choice ->
             column.addView(CheckBox(context).apply {
-                text = platform.label(); setTextColor(Color.WHITE)
-                isChecked = platform in config.platforms
-                isEnabled = if (isChecked) config.platforms.size > 1 else config.platforms.size < 3
-                setOnClickListener { AppStorage.configure { it.toggle(platform) } }
+                text = choice.label(); setTextColor(Color.WHITE)
+                isChecked = choice in rows
+                isEnabled = (isChecked || rows.size < 3) && !(choice == ClockRow.PUBLIC && isChecked && rows.size == 1)
+                setOnClickListener { AppStorage.update { current -> current.copy(clockRows =
+                    if (choice in current.clockRows) (current.clockRows - choice).ifEmpty { listOf(ClockRow.PUBLIC) }
+                    else (current.clockRows + choice).distinct().take(3)) } }
             })
         }
-        config.platforms.forEachIndexed { index, platform ->
+        rows.forEachIndexed { index, choice ->
             val row = LinearLayout(context)
-            row.addView(TextView(context).apply { text = platform.label(); setTextColor(Color.WHITE) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+            row.addView(TextView(context).apply { text = choice.label(); setTextColor(Color.WHITE) }, LinearLayout.LayoutParams(0, dp(48), 1f))
             listOf(-1 to "上移", 1 to "下移").forEach { (direction, label) ->
                 row.addView(Button(context).apply {
-                    text = label; contentDescription = "${platform.label()}$label"
-                    isEnabled = index + direction in config.platforms.indices
-                    setOnClickListener { AppStorage.configure { it.move(platform, direction) } }
+                    text = label; contentDescription = "${choice.label()}$label"
+                    isEnabled = index + direction in rows.indices
+                    setOnClickListener { AppStorage.update { current ->
+                        val ordered = current.clockRows.toMutableList()
+                        val from = ordered.indexOf(choice)
+                        if (from >= 0 && from + direction in ordered.indices) java.util.Collections.swap(ordered, from, from + direction)
+                        current.copy(clockRows = ordered)
+                    } }
                 })
             }
             column.addView(row)

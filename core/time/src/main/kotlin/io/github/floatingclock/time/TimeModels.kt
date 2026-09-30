@@ -116,6 +116,12 @@ class TimeReadings {
         return utcNanos[platform.ordinal]
     }
 
+    /** Same captured reading, retaining global offset but excluding this entry's manual preset.
+     * Does not read the clock, mutate offsets or change the calibration anchor.
+     */
+    fun shownUtcEpochNanosWithoutPreset(platform: PlatformId): Long = Math.subtractExact(
+        shownUtcEpochNanos(platform), Math.multiplyExact(state(platform).manualOffsetMillis, 1_000_000L))
+
     /** Floor division also handles dates before the Unix epoch correctly. */
     fun shownUtcEpochMillis(platform: PlatformId): Long =
         Math.floorDiv(shownUtcEpochNanos(platform), 1_000_000L)

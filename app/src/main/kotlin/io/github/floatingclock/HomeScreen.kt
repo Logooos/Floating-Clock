@@ -37,6 +37,7 @@ import java.util.Locale
 
 private val LightHome = lightColorScheme(
     primary = Color(0xff0b57d0), onPrimary = Color.White,
+    secondaryContainer = Color(0xffe6eeff), onSecondaryContainer = Color(0xff17478e),
     primaryContainer = Color(0xffe6eeff), onPrimaryContainer = Color(0xff17478e),
     background = Color(0xffeef2f6), surface = Color(0xffeef2f6),
     surfaceContainer = Color.White, onSurface = Color(0xff17212b),
@@ -46,6 +47,7 @@ private val LightHome = lightColorScheme(
 )
 private val DarkHome = darkColorScheme(
     primary = Color(0xffa8c7fa), onPrimary = Color(0xff062e6f),
+    secondaryContainer = Color(0xff223957), onSecondaryContainer = Color(0xffcde0ff),
     primaryContainer = Color(0xff223957), onPrimaryContainer = Color(0xffcde0ff),
     background = Color(0xff10151d), surface = Color(0xff10151d),
     surfaceContainer = Color(0xff18212d), onSurface = Color(0xffe8edf4),
@@ -85,7 +87,7 @@ internal fun homeTime(engine: TimeEngine, running: Boolean, state: PlatformTimeS
     if (!running || !state.anchorUsable || state.status == CalibrationStatus.STOPPED) return null
     val anchor = state.lastSuccess?.anchor ?: return null
     return engine.shownUtcEpochNanos(anchor, preferences.globalOffsetMillis,
-        preferences.platformOffsetsMillis[preferences.overlay.platforms.first()] ?: 0)
+        preferences.clockRows.first().preset?.let { preferences.platformOffsetsMillis[it] } ?: 0)
 }
 
 internal fun homeSource(state: PlatformTimeState): String = when {
@@ -106,13 +108,15 @@ internal fun HomeScreen(
     overlayGranted: Boolean, notificationsGranted: Boolean, message: String, storageError: String?,
     start: () -> Unit, stop: () -> Unit, grantOverlay: () -> Unit, grantNotifications: () -> Unit,
     sync: () -> Unit, settings: () -> Unit, diagnostics: () -> Unit,
+    appearance: () -> Unit = settings,
 ) {
     val colors = MaterialTheme.colorScheme
     var readFailed by remember(state, running) { mutableStateOf(false) }
     val status = if (readFailed) "无可信时间" else homeStatus(running, requested, state)
     val warning = running && (readFailed || state.status in setOf(CalibrationStatus.STALE, CalibrationStatus.RETRYING, CalibrationStatus.RESELECT_REQUIRED))
     var details by remember { mutableStateOf(false) }
-    val platform = preferences.overlay.platforms.first()
+    val row = preferences.clockRows.first()
+    val platform = row.preset
     val offset = preferences.globalOffsetMillis + (preferences.platformOffsetsMillis[platform] ?: 0)
     val demo = preferences.sourceChoice == SourceChoice.DEMO || state.sourceId?.startsWith("demo:") == true
     Scaffold(containerColor = colors.background,
@@ -134,17 +138,7 @@ internal fun HomeScreen(
                             style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     }
                     HorizontalDivider(color = colors.outlineVariant)
-                    NavigationBar(containerColor = colors.surfaceContainer, tonalElevation = 0.dp) {
-                        listOf("时钟", "外观", "诊断").forEachIndexed { index, label ->
-                            NavigationBarItem(selected = index == 0, enabled = index == 0 || ready,
-                                onClick = { when (index) { 1 -> settings(); 2 -> diagnostics() } },
-                                icon = { HomeNavIcon(index) }, label = { Text(label) },
-                                modifier = Modifier.testTag("home-nav-$index"),
-                                colors = NavigationBarItemDefaults.colors(indicatorColor = colors.primaryContainer,
-                                    selectedIconColor = colors.primary, selectedTextColor = colors.primary,
-                                    unselectedIconColor = colors.onSurfaceVariant, unselectedTextColor = colors.onSurfaceVariant))
-                        }
-                    }
+                    ClockNavigation(0, ready) { when (it) { 1 -> appearance(); 2 -> diagnostics() } }
                 }
             }
         }) { insets ->
@@ -157,6 +151,7 @@ internal fun HomeScreen(
             Surface(shape = HomeDesign.card, color = colors.surfaceContainer, border = BorderStroke(1.dp, colors.outlineVariant)) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(HomeDesign.gap)) {
+                    if (platform != null) Text(row.label(), style = MaterialTheme.typography.labelMedium)
                     HomeClock(engine, state, preferences, running, active) { readFailed = true }
                     Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = colors.outlineVariant)
@@ -194,8 +189,18 @@ internal fun HomeScreen(
                             fontFamily = FontFamily.Monospace, color = colors.primary)
                         TextButton(onClick = settings, enabled = ready) { Text("调整") }
                     }
-                    Text("${platform.label()}预设 · 与悬浮首行一致", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    Text("${row.label()} · 与悬浮首行一致", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     Text("手动偏移不代表平台官方时间", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
+            if (!preferences.presetMigrationAcknowledged) {
+                Surface(shape = HomeDesign.control, color = colors.primaryContainer) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("平台入口现在称为手动偏移预设，原设置已保留；未接入平台官方时间。")
+                        TextButton(onClick = { AppStorage.update { it.copy(presetMigrationAcknowledged = true) }; settings() }) { Text("查看我的预设") }
+                        TextButton(onClick = { AppStorage.update { it.usePublicClock() } }) { Text("改用公共单行（保留偏移）") }
+                        TextButton(onClick = { AppStorage.update { it.copy(presetMigrationAcknowledged = true) } }) { Text("知道了") }
+                    }
                 }
             }
             HorizontalDivider(color = colors.outlineVariant)
@@ -233,8 +238,8 @@ internal fun HomeScreen(
 }
 
 @Composable
-private fun HomeNavIcon(index: Int) {
-    val color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+internal fun HomeNavIcon(index: Int) {
+    val color = LocalContentColor.current
     Canvas(Modifier.size(22.dp)) {
         val stroke = 1.7.dp.toPx()
         when (index) {
@@ -283,4 +288,29 @@ private fun HomeClock(engine: TimeEngine, state: PlatformTimeState, preferences:
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     Text(if (preferences.zoneId == "Asia/Shanghai") "北京时间 · UTC+08:00" else preferences.zoneId,
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+internal fun ClockNavigation(selected: Int, ready: Boolean = true, navigate: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    NavigationBar(containerColor = colors.surfaceContainer, tonalElevation = 0.dp) {
+        listOf("时钟", "外观", "诊断").forEachIndexed { index, label ->
+            NavigationBarItem(selected = selected == index, enabled = index == 0 || ready,
+                onClick = { navigate(index) }, icon = { HomeNavIcon(index) }, label = { Text(label) },
+                modifier = Modifier.testTag("home-nav-$index"),
+                colors = NavigationBarItemDefaults.colors(indicatorColor = colors.primaryContainer,
+                    selectedIconColor = colors.primary, selectedTextColor = colors.primary,
+                    unselectedIconColor = colors.onSurfaceVariant, unselectedTextColor = colors.onSurfaceVariant))
+        }
+    }
+}
+
+internal fun shortSource(state: PlatformTimeState): String = when {
+    state.sourceId?.startsWith("demo:") == true -> "演示"
+    state.sourceType == TimeSourceType.SYSTEM_NETWORK -> "系统网络"
+    state.sourceType == TimeSourceType.HTTP_ESTIMATE -> "HTTP估算"
+    state.sourceId?.contains("cloudflare") == true -> "NTP·Cloudflare"
+    state.sourceId?.contains("google") == true -> "NTP·Google"
+    state.sourceType == TimeSourceType.NTP -> "公共NTP"
+    else -> "来源待校准"
 }
