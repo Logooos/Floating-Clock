@@ -24,7 +24,7 @@ API 35 使用干净 Pixel 2 AVD，十二张正式布局 PNG 已生成，主要�
 lint 曾发现组合中直接读取 StateFlow.value，已改 collectAsState 并缓存日期格式器；上述最终四项检查包含修复。
 这些失败轮次不计作通过。
 
-本地 API 31／33：**NOT RUN**，由远端同代码提交的 CI 矩阵验证；提交前云端结果尚未验证。
+本地 API 31／33：**NOT RUN**；远端同代码提交的 CI 矩阵已通过，见下表。
 CI 保留 API 31／33／35，截图产物为 `ui-api35-screenshots`：首页六状态图，加外观／高级设置／诊断各两主题，共十二张。
 Debug APK 为 `floating-clock-debug`；截图身份在产物 README 和 MediaStore 元数据中说明，不进入正式首页。
 截图使用假源与真实引擎，不访问公共网络、不证明 50ms 或 120FPS。
@@ -34,6 +34,28 @@ Debug APK 为 `floating-clock-debug`；截图身份在产物 README 和 MediaSto
 真机视觉、HyperOS 跨 App 悬浮、TalkBack、全部尺寸／字体组合、真实覆盖升级、120FPS 与可信参考精度：**NOT RUN**。
 CI Debug 签名由各 runner 临时产生，未保证不同工作流 APK 签名一致；不要为试装直接卸载有重要数据的旧版。
 模型级迁移测试通过不等于已验证真实签名 APK 从 v0.5.0 覆盖升级；该设备测试保持待验收。
+
+### 最终云端验收
+
+受测代码：`4d765a638d5155336e6ee6ddaccf8337e3309704`。
+[GitHub Actions 36715196976](https://github.com/Logooos/Floating-Clock/actions/runs/36715196976)
+已核对 head_sha 一致，build 与 API 31／33／35 全部为 success。
+
+| 检查 | 结果 |
+| --- | --- |
+| `testDebugUnitTest`，含 `:core:time:test` | PASS：core 72、app 43 |
+| `lintDebug` / `assembleDebug` | PASS / PASS |
+| API 31 `connectedDebugAndroidTest` | PASS：33 项 |
+| API 33 `connectedDebugAndroidTest` | PASS：34 项 |
+| API 35 `connectedDebugAndroidTest` | PASS：34 项 |
+| 十二张 API 35 PNG 存在且非空 | PASS：首页六状态图、外观／高级设置／诊断各两主题 |
+| Room schema 与已提交内容一致 | PASS：未改历史结构 |
+
+JUnit 计数从对应任务的检查注释核对，failures/errors/skipped 均为 0。
+下载 [Debug APK](https://github.com/Logooos/Floating-Clock/actions/runs/36715196976/artifacts/11095734065)
+和 [十二张 API 35 截图](https://github.com/Logooos/Floating-Clock/actions/runs/36715196976/artifacts/11096566166)，可能需要 GitHub 登录。
+两者属于上述同一代码提交；模拟截图不作为实际网络测量证据。
+本段由后续纯文档提交 `[skip ci]` 记录，不把该文档提交当作再次编译或设备验证。
 
 ## v0.6.0-home.2 首页层级迭代
 
